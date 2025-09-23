@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# IDE caches
+.vs/
+.vscode/
+.idea/
+
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# User files
+*.user
+*.suo
