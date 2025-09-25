@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 using Backend.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize] // default: all endpoints require a valid JWT
 public class OwnersController : ControllerBase
 {
     private readonly IMongoCollection<Owner> _owners;
@@ -14,21 +16,14 @@ public class OwnersController : ControllerBase
     {
         _owners = db.GetCollection<Owner>("owners");
 
-        // Ensure NIC is unique (runs once, safe to leave here)
+        // Ensure NIC unique index
         var keys = Builders<Owner>.IndexKeys.Ascending(o => o.Nic);
         var opt = new CreateIndexOptions { Unique = true, Name = "ux_owners_nic" };
         _owners.Indexes.CreateOne(new CreateIndexModel<Owner>(keys, opt));
     }
 
-    // GET /api/owners/{nic}
-    [HttpGet("{nic}")]
-    public async Task<IActionResult> GetByNic(string nic)
-    {
-        var o = await _owners.Find(x => x.Nic == nic).FirstOrDefaultAsync();
-        return o is null ? NotFound() : Ok(o);
-    }
-
-    // POST /api/owners
+    // POST /api/owners  (owner registration - public)
+    [AllowAnonymous]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] Owner o)
     {
@@ -45,10 +40,34 @@ public class OwnersController : ControllerBase
         }
     }
 
+    // GET /api/owners/{nic}
+    // Any logged-in user; if EVOwner, can only read their own NIC
+    [HttpGet("{nic}")]
+    public async Task<IActionResult> GetByNic(string nic)
+    {
+        if (User.IsInRole("EVOwner"))
+        {
+            var nicClaim = User.FindFirst("nic")?.Value;
+            if (!string.Equals(nicClaim, nic, StringComparison.OrdinalIgnoreCase))
+                return Forbid();
+        }
+
+        var o = await _owners.Find(x => x.Nic == nic).FirstOrDefaultAsync();
+        return o is null ? NotFound() : Ok(o);
+    }
+
     // PUT /api/owners/{nic}
+    // Any logged-in user; if EVOwner, can only update their own NIC
     [HttpPut("{nic}")]
     public async Task<IActionResult> Update(string nic, [FromBody] UpdateOwnerDto patch)
     {
+        if (User.IsInRole("EVOwner"))
+        {
+            var nicClaim = User.FindFirst("nic")?.Value;
+            if (!string.Equals(nicClaim, nic, StringComparison.OrdinalIgnoreCase))
+                return Forbid();
+        }
+
         var upd = Builders<Owner>.Update
             .Set(x => x.Name, patch.Name)
             .Set(x => x.Phone, patch.Phone)
@@ -59,7 +78,8 @@ public class OwnersController : ControllerBase
         return res.MatchedCount == 0 ? NotFound() : NoContent();
     }
 
-    // POST /api/owners/{nic}/deactivate
+    // POST /api/owners/{nic}/deactivate  (Backoffice only)
+    [Authorize(Roles = "Backoffice")]
     [HttpPost("{nic}/deactivate")]
     public async Task<IActionResult> Deactivate(string nic)
     {
@@ -73,7 +93,8 @@ public class OwnersController : ControllerBase
         return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Owner deactivated" });
     }
 
-    // POST /api/owners/{nic}/reactivate
+    // POST /api/owners/{nic}/reactivate  (Backoffice only)
+    [Authorize(Roles = "Backoffice")]
     [HttpPost("{nic}/reactivate")]
     public async Task<IActionResult> Reactivate(string nic)
     {

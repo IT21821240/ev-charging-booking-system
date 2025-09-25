@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 using Backend.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize] // default: all actions require a valid JWT
 public class StationsController : ControllerBase
 {
     private readonly IMongoCollection<Station> _stations;
@@ -18,10 +20,12 @@ public class StationsController : ControllerBase
     }
 
     // GET /api/stations
+    // Any authenticated role can view stations (Backoffice/Operator/Owner)
     [HttpGet]
     public Task<List<Station>> All() => _stations.Find(_ => true).ToListAsync();
 
-    // POST /api/stations
+    // POST /api/stations  (Backoffice only)
+    [Authorize(Roles = "Backoffice")]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] Station s)
     {
@@ -29,7 +33,8 @@ public class StationsController : ControllerBase
         return Ok(s);
     }
 
-    // PUT /api/stations/{id}
+    // PUT /api/stations/{id}  (Backoffice only)
+    [Authorize(Roles = "Backoffice")]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string id, [FromBody] Station s)
     {
@@ -38,13 +43,14 @@ public class StationsController : ControllerBase
         return res.MatchedCount == 0 ? NotFound() : NoContent();
     }
 
-    // POST /api/stations/{id}/deactivate
+    // POST /api/stations/{id}/deactivate  (Backoffice or StationOperator)
+    [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpPost("{id}/deactivate")]
     public async Task<IActionResult> Deactivate(string id)
     {
         var now = DateTime.UtcNow;
 
-        // check if there are active future bookings
+        // block if there are future Pending/Approved bookings
         var hasActiveFuture = await _bookings.Find(b =>
             b.StationId == id &&
             b.StartTime > now &&
@@ -52,21 +58,18 @@ public class StationsController : ControllerBase
         ).AnyAsync();
 
         if (hasActiveFuture)
-        {
             return Conflict(new { message = "Cannot deactivate: station has active future bookings." });
-        }
 
         var res = await _stations.UpdateOneAsync(
             s => s.Id == id,
             Builders<Station>.Update.Set(s => s.IsActive, false)
         );
 
-        return res.MatchedCount == 0
-            ? NotFound()
-            : Ok(new { message = "Station deactivated" });
+        return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Station deactivated" });
     }
 
-    // POST /api/stations/{id}/reactivate
+    // POST /api/stations/{id}/reactivate  (Backoffice or StationOperator)
+    [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpPost("{id}/reactivate")]
     public async Task<IActionResult> Reactivate(string id)
     {
@@ -75,8 +78,6 @@ public class StationsController : ControllerBase
             Builders<Station>.Update.Set(s => s.IsActive, true)
         );
 
-        return res.MatchedCount == 0
-            ? NotFound()
-            : Ok(new { message = "Station reactivated" });
+        return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Station reactivated" });
     }
 }

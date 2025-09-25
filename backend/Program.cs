@@ -1,6 +1,10 @@
 using MongoDB.Driver;
 using DotNetEnv;
 using Backend.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using Backend.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +33,44 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddScoped<Backend.Services.BookingRules>();
 
+// JWT settings
+var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? builder.Configuration["Jwt:Key"];
+var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? builder.Configuration["Jwt:Issuer"] ?? "evcs.api";
+var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? builder.Configuration["Jwt:Audience"] ?? "evcs.clients";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!)),
+            ClockSkew = TimeSpan.Zero // make token expiry exact, no grace period
+        };
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddScoped<TokenService>(); // our token helper
+
+builder.Services.AddCors(opt =>
+{
+    opt.AddPolicy("AllowedOrigins", p => p
+        .WithOrigins("http://localhost:5173", "http://localhost:3000") // your React dev URL(s)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
+
 var app = builder.Build();
+
+app.UseCors("AllowedOrigins");
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // 3) Pipeline
 if (app.Environment.IsDevelopment())
