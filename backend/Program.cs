@@ -4,7 +4,7 @@ using Backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Backend.Data;
+using Backend.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,7 +54,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddScoped<TokenService>(); // our token helper
+builder.Services.AddScoped<ITokenService, TokenService>();// our token helper
 
 builder.Services.AddCors(opt =>
 {

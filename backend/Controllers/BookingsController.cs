@@ -1,3 +1,7 @@
+// -----------------------------------------------------------------
+// File: BookingsController.cs
+// Purpose: Manage booking creation, update, cancel
+// -----------------------------------------------------------------
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 using Backend.Models;

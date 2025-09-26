@@ -1,7 +1,10 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Backend.Models;
 
 public class UpdateBookingDto
 {
-    public DateTime StartTime { get; set; }
-    public DateTime EndTime { get; set; }
+    [Required] public DateTime StartTime { get; set; } // UTC
+    [Required] public DateTime EndTime { get; set; }   // UTC
 }
+
