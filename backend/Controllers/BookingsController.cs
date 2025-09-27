@@ -153,4 +153,14 @@ public class BookingsController : ControllerBase
             Builders<Booking>.Update.Set(x => x.Status, "Completed"));
         return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Session completed" });
     }
+
+    [Authorize(Roles = "Backoffice,StationOperator")]
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(string id)
+    {
+        var booking = await _bookings.Find(b => b.Id == id).FirstOrDefaultAsync();
+        if (booking == null) return NotFound();
+        return Ok(booking);
+    }
+
 }
