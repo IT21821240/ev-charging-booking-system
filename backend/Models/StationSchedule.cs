@@ -9,11 +9,12 @@ namespace Backend.Models;
 
 public class StationSchedule
 {
+    // Store Mongo _id as ObjectId, but expose as string in C#
     [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
 
     // Stored as ObjectId in Mongo; handled as string here
-    [BsonRepresentation(BsonType.ObjectId)]
     public string StationId { get; set; } = default!;
 
     // Date-only (midnight, Kind=Unspecified)

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 using Backend.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -26,24 +26,42 @@ public class StationSchedulesController : ControllerBase
         var station = await _stations.Find(s => s.Id == id && s.IsActive).FirstOrDefaultAsync();
         if (station is null) return NotFound("Station not found or inactive");
 
+        // ✅ normalize date to UTC midnight
+        dto.Date = DateTime.SpecifyKind(dto.Date.Date, DateTimeKind.Utc);
+
+        // ✅ validate time range in minutes
+        if (dto.OpenMinutes < 0 || dto.OpenMinutes >= dto.CloseMinutes || dto.CloseMinutes > 1440)
+            return BadRequest("Open/Close minutes invalid");
+
+        // existing max concurrent check
         if (dto.MaxConcurrent <= 0 || dto.MaxConcurrent > station.TotalSlots)
             return BadRequest("MaxConcurrent must be 1..TotalSlots");
 
         dto.Id = MongoDB.Bson.ObjectId.GenerateNewId().ToString();
         dto.StationId = id;
+
         await _schedules.InsertOneAsync(dto);
         return Ok(dto);
     }
 
     // GET /api/stations/{id}/schedules?from=2025-09-26&to=2025-10-03
-    [AllowAnonymous] // if you prefer read-open
     [HttpGet("stations/{id}/schedules")]
     public async Task<IActionResult> List(string id, [FromQuery] DateTime from, [FromQuery] DateTime to)
     {
         if (to < from) return BadRequest("to < from");
-        var res = await _schedules.Find(x => x.StationId == id && x.Date >= from.Date && x.Date <= to.Date).ToListAsync();
+
+        // ✅ normalize to UTC date-only to avoid off-by-one issues
+        var fromUtc = DateTime.SpecifyKind(from.Date, DateTimeKind.Utc);
+        var toUtc = DateTime.SpecifyKind(to.Date, DateTimeKind.Utc);
+
+        var res = await _schedules.Find(x =>
+            x.StationId == id &&
+            x.Date >= fromUtc && x.Date <= toUtc
+        ).ToListAsync();
+
         return Ok(res);
     }
+
 
     // PUT /api/schedules/{scheduleId}
     [HttpPut("schedules/{scheduleId}")]
@@ -52,17 +70,25 @@ public class StationSchedulesController : ControllerBase
         var current = await _schedules.Find(x => x.Id == scheduleId).FirstOrDefaultAsync();
         if (current is null) return NotFound();
 
-        // enforce limits again (need station)
         var station = await _stations.Find(s => s.Id == current.StationId).FirstOrDefaultAsync();
         if (station is null) return NotFound("Station missing");
+
+        // ✅ normalize date to UTC midnight
+        var normalizedDate = DateTime.SpecifyKind(patch.Date.Date, DateTimeKind.Utc);
+
+        // ✅ validate time range in minutes
+        if (patch.OpenMinutes < 0 || patch.OpenMinutes >= patch.CloseMinutes || patch.CloseMinutes > 1440)
+            return BadRequest("Open/Close minutes invalid");
+
+        // existing max concurrent check
         if (patch.MaxConcurrent <= 0 || patch.MaxConcurrent > station.TotalSlots)
             return BadRequest("MaxConcurrent must be 1..TotalSlots");
 
         var upd = Builders<StationSchedule>.Update
-          .Set(x => x.Date, patch.Date)
-          .Set(x => x.OpenMinutes, patch.OpenMinutes)
-          .Set(x => x.CloseMinutes, patch.CloseMinutes)
-          .Set(x => x.MaxConcurrent, patch.MaxConcurrent);
+            .Set(x => x.Date, normalizedDate)
+            .Set(x => x.OpenMinutes, patch.OpenMinutes)
+            .Set(x => x.CloseMinutes, patch.CloseMinutes)
+            .Set(x => x.MaxConcurrent, patch.MaxConcurrent);
 
         var res = await _schedules.UpdateOneAsync(x => x.Id == scheduleId, upd);
         return res.MatchedCount == 0 ? NotFound() : NoContent();
