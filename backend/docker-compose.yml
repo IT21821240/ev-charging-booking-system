@@ -1,0 +1,16 @@
+# backend/docker-compose.yml 
+services:
+  backend:
+    build:
+      context: .              # build from THIS backend folder
+      # dockerfile: Dockerfile  # optional (picked up automatically)
+    environment:
+      MONGO_CONNECTION_STRING: ${MONGO_CONNECTION_STRING}
+      MONGO_DATABASE: ${MONGO_DATABASE:-EVsystemdb}
+      JWT_KEY: ${JWT_KEY}
+      JWT_ISSUER: ${JWT_ISSUER:-evcs.api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-evcs.clients}
+      ASPNETCORE_URLS: http://+:5014
+      ASPNETCORE_ENVIRONMENT: Production
+    ports:
+      - "5014:5014"
