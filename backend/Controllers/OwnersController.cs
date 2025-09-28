@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using MongoDB.Driver;
 using System.Security.Claims;
@@ -35,10 +35,22 @@ public class OwnersController : ControllerBase
     [HttpPost("self-register")]
     public async Task<IActionResult> SelfRegister([FromBody] SelfRegisterDto dto)
     {
-        if (string.IsNullOrWhiteSpace(dto.Nic) || string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
+        if (string.IsNullOrWhiteSpace(dto.Nic) ||
+            string.IsNullOrWhiteSpace(dto.Email) ||
+            string.IsNullOrWhiteSpace(dto.Password))
             return BadRequest("NIC, Email and Password are required.");
 
         var now = DateTime.UtcNow;
+        var users = HttpContext.RequestServices
+            .GetRequiredService<IMongoDatabase>()
+            .GetCollection<User>("users");
+
+        var email = dto.Email.Trim().ToLowerInvariant();
+
+        // ✅ Check once
+        var existing = await users.Find(u => u.Email == email).FirstOrDefaultAsync();
+        if (existing is not null)
+            return Conflict(new { message = "Email already in use." });
 
         // 1) Upsert owner profile
         var upd = Builders<Owner>.Update
@@ -52,34 +64,24 @@ public class OwnersController : ControllerBase
 
         await _owners.UpdateOneAsync(o => o.Nic == dto.Nic, upd, new UpdateOptions { IsUpsert = true });
 
-        // 2) Create users login (email + password)
-        var users = HttpContext.RequestServices.GetRequiredService<IMongoDatabase>().GetCollection<User>("users");
-
-        var existing = await users.Find(u => u.Email == dto.Email.ToLower()).FirstOrDefaultAsync();
-        if (existing is null)
+        // 2) Insert user
+        var user = new User
         {
-            var user = new User
-            {
-                Email = dto.Email.Trim().ToLowerInvariant(),
-                Username = null,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-                Role = "EVOwner",
-                Nic = dto.Nic,
-                IsActive = true,
-                CreatedAt = now
-            };
-            await users.InsertOneAsync(user);
-        }
-        else if (existing.Role != "EVOwner")
-        {
-            return Conflict(new { message = "Email already in use by a non-owner account." });
-        }
+            Email = email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
+            Role = "EVOwner",
+            Nic = dto.Nic,
+            IsActive = true,
+            CreatedAt = now
+        };
 
-        // 3) Issue token for mobile
+        await users.InsertOneAsync(user);
+
+        // 3) Issue token
         var claims = new List<Claim> {
         new Claim(ClaimTypes.Role, "EVOwner"),
         new Claim("nic", dto.Nic),
-        new Claim("email", dto.Email.Trim().ToLowerInvariant())
+        new Claim("email", email)
     };
         var token = _tokens.IssueToken(claims);
 
@@ -200,27 +202,89 @@ public class OwnersController : ControllerBase
     [HttpPost("{nic}/deactivate")]
     public async Task<IActionResult> Deactivate(string nic)
     {
-        var res = await _owners.UpdateOneAsync(
+        var now = DateTime.UtcNow;
+
+        // Deactivate Owner profile
+        var ownerRes = await _owners.UpdateOneAsync(
             o => o.Nic == nic,
             Builders<Owner>.Update
                 .Set(o => o.IsActive, false)
-                .Set(o => o.UpdatedAt, DateTime.UtcNow)
+                .Set(o => o.UpdatedAt, now)
         );
 
-        return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Owner deactivated" });
+        // Deactivate corresponding user (if exists)
+        var users = HttpContext.RequestServices.GetRequiredService<IMongoDatabase>().GetCollection<User>("users");
+        await users.UpdateOneAsync(
+            u => u.Nic == nic && u.Role == "EVOwner",
+            Builders<User>.Update
+                .Set(u => u.IsActive, false)
+                .Set(u => u.UpdatedAt, now)
+        );
+
+        return ownerRes.MatchedCount == 0
+            ? NotFound(new { message = "Owner not found." })
+            : Ok(new { message = "Owner and user account deactivated." });
     }
 
     [Authorize(Roles = "Backoffice")]
     [HttpPost("{nic}/reactivate")]
     public async Task<IActionResult> Reactivate(string nic)
     {
-        var res = await _owners.UpdateOneAsync(
+        var now = DateTime.UtcNow;
+
+        // Reactivate Owner profile
+        var ownerRes = await _owners.UpdateOneAsync(
             o => o.Nic == nic,
             Builders<Owner>.Update
                 .Set(o => o.IsActive, true)
-                .Set(o => o.UpdatedAt, DateTime.UtcNow)
+                .Set(o => o.UpdatedAt, now)
         );
 
-        return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Owner reactivated" });
+        // Reactivate corresponding user (if exists)
+        var users = HttpContext.RequestServices.GetRequiredService<IMongoDatabase>().GetCollection<User>("users");
+        await users.UpdateOneAsync(
+            u => u.Nic == nic && u.Role == "EVOwner",
+            Builders<User>.Update
+                .Set(u => u.IsActive, true)
+                .Set(u => u.UpdatedAt, now)
+        );
+
+        return ownerRes.MatchedCount == 0
+            ? NotFound(new { message = "Owner not found." })
+            : Ok(new { message = "Owner and user account reactivated." });
+    }
+
+    // ---------- MOBILE: EV Owner self-deactivate ----------
+    [HttpPost("self-deactivate")]
+    [Authorize(Roles = "EVOwner")]
+    public async Task<IActionResult> SelfDeactivate()
+    {
+        var nicClaim = User.FindFirst("nic")?.Value;
+        if (string.IsNullOrEmpty(nicClaim))
+            return Unauthorized("NIC claim missing.");
+
+        var now = DateTime.UtcNow;
+
+        // Deactivate Owner profile
+        var ownerRes = await _owners.UpdateOneAsync(
+            o => o.Nic == nicClaim,
+            Builders<Owner>.Update
+                .Set(o => o.IsActive, false)
+                .Set(o => o.UpdatedAt, now)
+        );
+
+        if (ownerRes.MatchedCount == 0)
+            return NotFound(new { message = "Owner not found." });
+
+        // Deactivate User login
+        var users = HttpContext.RequestServices.GetRequiredService<IMongoDatabase>().GetCollection<User>("users");
+        await users.UpdateOneAsync(
+            u => u.Nic == nicClaim && u.Role == "EVOwner",
+            Builders<User>.Update
+                .Set(u => u.IsActive, false)
+                .Set(u => u.UpdatedAt, now)
+        );
+
+        return Ok(new { message = "Your account and login have been deactivated." });
     }
 }

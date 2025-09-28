@@ -23,9 +23,6 @@ public class AuthController : ControllerBase
         _users.Indexes.CreateOne(new CreateIndexModel<User>(
             Builders<User>.IndexKeys.Ascending(u => u.Email),
             new CreateIndexOptions { Unique = true, Name = "ux_users_email" }));
-        _users.Indexes.CreateOne(new CreateIndexModel<User>(
-            Builders<User>.IndexKeys.Ascending(u => u.Username),
-            new CreateIndexOptions { Unique = true, Sparse = true, Name = "ux_users_username" }));
     }
 
     // ========= REGISTER (Backoffice only) =========
@@ -43,7 +40,6 @@ public class AuthController : ControllerBase
         var user = new User
         {
             Email = req.Email.Trim().ToLowerInvariant(),
-            Username = null, // legacy field not used
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
             Role = req.Role,
             Nic = null,
@@ -101,7 +97,6 @@ public class AuthController : ControllerBase
             .Project(u => new UserDto
             {
                 Id = u.Id,
-                Username = u.Username,
                 Email = u.Email,
                 Role = u.Role,
                 IsActive = u.IsActive,
@@ -118,24 +113,43 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> DeactivateUser(string id)
     {
         var target = await _users.Find(u => u.Id == id).FirstOrDefaultAsync();
-        if (target is null) return NotFound("User not found.");
+        if (target is null) return NotFound(new { message = "User not found." });
 
         // prevent deactivating yourself
-        var currentUsername = User.Identity?.Name;
-        if (string.Equals(target.Username, currentUsername, StringComparison.OrdinalIgnoreCase))
-            return BadRequest("You cannot deactivate your own account.");
+        var currentEmail = User.Identity?.Name;
+        if (string.Equals(target.Email, currentEmail, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "You cannot deactivate your own account." });
 
         // prevent deactivating the last active Backoffice
         if (target.Role == "Backoffice")
         {
             var activeAdmins = await _users.CountDocumentsAsync(u => u.Role == "Backoffice" && u.IsActive);
             if (activeAdmins <= 1)
-                return BadRequest("Cannot deactivate the last active Backoffice user.");
+                return BadRequest(new { message = "Cannot deactivate the last active Backoffice user." });
         }
 
-        var upd = Builders<User>.Update.Set(u => u.IsActive, false);
+        var now = DateTime.UtcNow;
+
+        // Deactivate user
+        var upd = Builders<User>.Update
+            .Set(u => u.IsActive, false)
+            .Set(u => u.UpdatedAt, now);
+
         await _users.UpdateOneAsync(u => u.Id == id, upd);
-        return NoContent();
+
+        // If EVOwner, also deactivate Owner profile
+        if (target.Role == "EVOwner" && !string.IsNullOrEmpty(target.Nic))
+        {
+            var owners = HttpContext.RequestServices.GetRequiredService<IMongoDatabase>().GetCollection<Owner>("owners");
+            await owners.UpdateOneAsync(
+                o => o.Nic == target.Nic,
+                Builders<Owner>.Update
+                    .Set(o => o.IsActive, false)
+                    .Set(o => o.UpdatedAt, now)
+            );
+        }
+
+        return Ok(new { message = "User (and owner if applicable) deactivated." });
     }
 
     // ========= REACTIVATE (Backoffice only) =========
@@ -143,20 +157,38 @@ public class AuthController : ControllerBase
     [Authorize(Roles = "Backoffice")]
     public async Task<IActionResult> ReactivateUser(string id)
     {
-        var exists = await _users.Find(u => u.Id == id).AnyAsync();
-        if (!exists) return NotFound("User not found.");
+        var target = await _users.Find(u => u.Id == id).FirstOrDefaultAsync();
+        if (target is null) return NotFound(new { message = "User not found." });
 
-        var upd = Builders<User>.Update.Set(u => u.IsActive, true);
+        var now = DateTime.UtcNow;
+
+        // Reactivate user
+        var upd = Builders<User>.Update
+            .Set(u => u.IsActive, true)
+            .Set(u => u.UpdatedAt, now);
+
         await _users.UpdateOneAsync(u => u.Id == id, upd);
-        return NoContent();
+
+        // If EVOwner, also reactivate Owner profile
+        if (target.Role == "EVOwner" && !string.IsNullOrEmpty(target.Nic))
+        {
+            var owners = HttpContext.RequestServices.GetRequiredService<IMongoDatabase>().GetCollection<Owner>("owners");
+            await owners.UpdateOneAsync(
+                o => o.Nic == target.Nic,
+                Builders<Owner>.Update
+                    .Set(o => o.IsActive, true)
+                    .Set(o => o.UpdatedAt, now)
+            );
+        }
+
+        return Ok(new { message = "User (and owner if applicable) reactivated." });
     }
 }
 
-// Return shape for list users
-public sealed class UserDto
+    // Return shape for list users
+    public sealed class UserDto
 {
-    public string Id { get; set; } = default!;
-    public string? Username { get; set; }        
+    public string Id { get; set; } = default!;     
     public string Email { get; set; } = default!; 
     public string Role { get; set; } = default!;
     public bool IsActive { get; set; }
