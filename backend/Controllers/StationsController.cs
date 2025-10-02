@@ -80,4 +80,20 @@ public class StationsController : ControllerBase
 
         return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Station reactivated" });
     }
+
+    // GET /api/stations/{id}?expand=false
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(string id, [FromQuery] bool expand = false)
+    {
+        var station = await _stations.Find(s => s.Id == id).FirstOrDefaultAsync();
+        if (station == null) return NotFound();
+
+        if (!expand) return Ok(station);
+
+        // If you later add schedules or want counters, you can expand here.
+        var pendingCount = await _bookings.CountDocumentsAsync(b =>
+            b.StationId == id && b.Status == "Pending");
+        return Ok(new { station, pendingCount });
+    }
+
 }

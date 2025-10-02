@@ -12,6 +12,7 @@ public class StationSchedulesController : ControllerBase
 {
     private readonly IMongoCollection<Station> _stations;
     private readonly IMongoCollection<StationSchedule> _schedules;
+    private readonly IMongoCollection<Booking> _bookings;
 
     public StationSchedulesController(IMongoDatabase db)
     {
@@ -101,4 +102,48 @@ public class StationSchedulesController : ControllerBase
         var res = await _schedules.DeleteOneAsync(x => x.Id == scheduleId);
         return res.DeletedCount == 0 ? NotFound() : NoContent();
     }
+
+    // GET /api/stations/{stationId}/slots?date=2025-10-05&minutesPerSlot=30
+    [AllowAnonymous] // or [Authorize] if you prefer
+    [HttpGet("stations/{stationId}/slots")]
+    public async Task<IActionResult> GetSlots(
+        string stationId, [FromQuery] DateTime date,
+        [FromQuery] int minutesPerSlot = 30)
+    {
+        // 1) Find schedule for that date
+        var day = date.Date;
+        var sched = await _schedules.Find(s =>
+            s.StationId == stationId && s.Date.Date == day).FirstOrDefaultAsync();
+        if (sched == null) return NotFound("No schedule for the selected date.");
+
+        // 2) Build slots from Open..Close
+        var open = day.AddMinutes(sched.OpenMinutes);
+        var close = day.AddMinutes(sched.CloseMinutes);
+        if (close <= open || minutesPerSlot <= 0) return BadRequest("Invalid schedule.");
+
+        var slots = new List<object>();
+        for (var start = open; start < close; start = start.AddMinutes(minutesPerSlot))
+        {
+            var end = start.AddMinutes(minutesPerSlot);
+            if (end > close) break;
+
+            // 3) Count overlapping bookings (Pending + Approved)
+            var activeCount = await _bookings.CountDocumentsAsync(b =>
+                b.StationId == stationId &&
+                (b.Status == "Pending" || b.Status == "Approved") &&
+                b.StartTime < end && b.EndTime > start);
+
+            var available = Math.Max(0, sched.MaxConcurrent - (int)activeCount);
+
+            slots.Add(new
+            {
+                startUtc = start,
+                endUtc = end,
+                available // 0 means full
+            });
+        }
+
+        return Ok(new { date = day, minutesPerSlot, maxConcurrent = sched.MaxConcurrent, slots });
+    }
+
 }
