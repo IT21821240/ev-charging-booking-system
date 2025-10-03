@@ -95,4 +95,27 @@ export const bookings = {
   validateQr: (token) =>
     api(`/bookings/validate-qr?token=${encodeURIComponent(token)}`),
   finalize: (id) => api(`/bookings/${id}/finalize`, { method: "POST" }),
+  get: (id) => api(`/bookings/${encodeURIComponent(id)}`),
 };
+
+export const schedules = {
+  list: (stationId, { from, to }) =>
+    api(
+      `/stations/${encodeURIComponent(stationId)}/schedules?` +
+      new URLSearchParams({ from, to }).toString()
+    ),
+  create: (stationId, body) =>
+    api(`/stations/${encodeURIComponent(stationId)}/schedules`, {
+      method: "POST",
+      body, // { Date, OpenMinutes, CloseMinutes, MaxConcurrent }
+    }),
+  update: (_stationId, scheduleId, body) =>
+    api(`/schedules/${encodeURIComponent(scheduleId)}`, {
+      method: "PUT",
+      body, // { Date, OpenMinutes, CloseMinutes, MaxConcurrent }
+    }),
+  remove: (_stationId, scheduleId) =>
+    api(`/schedules/${encodeURIComponent(scheduleId)}`, { method: "DELETE" }),
+};
+
+

@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import Login from "./pages/Login";
@@ -9,6 +9,8 @@ import OwnersPage from "./pages/OwnersPage";
 import StationsPage from "./pages/StationsPage";
 import BookingsPage from "./pages/BookingsPage";
 import UsersPage from "./pages/UsersPage";
+import OperatorQR from "./pages/OperatorQR";
+import StationSchedulesPage from "./pages/StationSchedulesPage";
 
 export default function App() {
   return (
@@ -71,7 +73,27 @@ export default function App() {
             }
           />
 
-          <Route path="*" element={<Login />} />
+          {/* moved inside <Routes> */}
+          <Route
+            path="/operator/qr"
+            element={
+              <ProtectedRoute roles={["StationOperator"]}>
+                <OperatorQR />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/backoffice/stations/:stationId/schedules"
+            element={
+              <ProtectedRoute roles={["Backoffice"]}>
+                <StationSchedulesPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* catch-all */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

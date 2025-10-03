@@ -3,7 +3,6 @@ import { users as usersApi } from "../api/client";
 
 export default function UsersPage() {
   const [form, setForm] = useState({
-    username: "",
     email: "",
     password: "",
     role: "Backoffice",
@@ -35,12 +34,11 @@ export default function UsersPage() {
       }
       await usersApi.create({
         email: form.email.trim().toLowerCase(),
-        username: form.username?.trim() || null, // keep username if provided
         password: form.password,
         role: form.role,
       });
       setMsg("User created.");
-      setForm({ username: "", email: "", password: "", role: "Backoffice" });
+      setForm({ email: "", password: "", role: "Backoffice" });
       load();
     } catch (e) {
       setMsg(e.message || "Failed to create user");
@@ -63,15 +61,6 @@ export default function UsersPage() {
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             required
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Username (optional)</label>
-          <input
-            className="border rounded px-3 py-2 w-full"
-            value={form.username}
-            onChange={(e) => setForm({ ...form, username: e.target.value })}
-            placeholder="e.g. jdoe"
           />
         </div>
         <div>
@@ -108,7 +97,6 @@ export default function UsersPage() {
               <thead>
                 <tr className="text-left border-b">
                   <th className="py-2 pr-4">Email</th>
-                  <th className="py-2 pr-4">Username</th>
                   <th className="py-2 pr-4">Role</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2">Actions</th>
@@ -118,7 +106,6 @@ export default function UsersPage() {
                 {list.map((u) => (
                   <tr key={u.id || u._id} className="border-b">
                     <td className="py-2 pr-4">{u.email}</td>
-                    <td className="py-2 pr-4">{u.username || "—"}</td>
                     <td className="py-2 pr-4">{u.role}</td>
                     <td className="py-2 pr-4">{u.isActive ? "Active" : "Inactive"}</td>
                     <td className="py-2">
