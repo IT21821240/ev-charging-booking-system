@@ -287,4 +287,17 @@ public class OwnersController : ControllerBase
 
         return Ok(new { message = "Your account and login have been deactivated." });
     }
+
+    // GET /api/owners/count
+    [Authorize(Roles = "Backoffice")]
+    [HttpGet("count")]
+    public async Task<IActionResult> CountOwners([FromQuery] bool? isActive)
+    {
+        var filter = isActive is null
+            ? Builders<Owner>.Filter.Empty
+            : Builders<Owner>.Filter.Eq(o => o.IsActive, isActive.Value);
+
+        var total = await _owners.CountDocumentsAsync(filter);
+        return Ok(new { total });
+    }
 }

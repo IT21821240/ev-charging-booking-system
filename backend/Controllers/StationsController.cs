@@ -96,4 +96,17 @@ public class StationsController : ControllerBase
         return Ok(new { station, pendingCount });
     }
 
+    // GET /api/stations/count
+    [Authorize(Roles = "Backoffice,StationOperator")]
+    [HttpGet("count")]
+    public async Task<IActionResult> CountStations([FromQuery] bool? isActive)
+    {
+        var filter = isActive is null
+            ? Builders<Station>.Filter.Empty
+            : Builders<Station>.Filter.Eq(s => s.IsActive, isActive.Value);
+
+        var total = await _stations.CountDocumentsAsync(filter);
+        return Ok(new { total });
+    }
+
 }

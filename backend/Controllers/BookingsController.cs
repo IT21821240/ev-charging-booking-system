@@ -346,4 +346,34 @@ public class BookingsController : ControllerBase
 
         return Ok(new { pending, approved });
     }
+
+    // GET /api/bookings/approved
+    [Authorize(Roles = "Backoffice,StationOperator")]
+    [HttpGet("approved")]
+    public async Task<IActionResult> GetApproved()
+    {
+        // Return all bookings with Status = "Approved"
+        var filter = Builders<Booking>.Filter.Eq(b => b.Status, "Approved");
+
+        var list = await _bookings.Find(filter)
+                                  .SortByDescending(b => b.StartTime)
+                                  .ToListAsync();
+
+        return Ok(list);
+    }
+
+    // GET /api/bookings/completed
+    [Authorize(Roles = "Backoffice,StationOperator")]
+    [HttpGet("completed")]
+    public async Task<IActionResult> GetCompleted()
+    {
+        // Return ALL completed bookings (no time filter)
+        var filter = Builders<Booking>.Filter.Eq(b => b.Status, "Completed");
+
+        var list = await _bookings.Find(filter)
+                                  .SortByDescending(b => b.StartTime) // newest first
+                                  .ToListAsync();
+
+        return Ok(list);
+    }
 }
