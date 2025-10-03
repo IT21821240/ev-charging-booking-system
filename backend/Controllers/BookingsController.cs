@@ -22,7 +22,7 @@ public class BookingsController : ControllerBase
     public BookingsController(IMongoDatabase db, BookingRules rules)
     {
         _bookings = db.GetCollection<Booking>("bookings");
-        _schedules = db.GetCollection<StationSchedule>("schedules");
+        _schedules = db.GetCollection<StationSchedule>("stationSchedules");
         _rules = rules;
 
         // Helpful indexes (idempotent)
@@ -334,4 +334,16 @@ public class BookingsController : ControllerBase
         return Ok(new { pending, approvedFuture });
     }
 
+    // Global counts (no station/operator mapping)
+    // GET /api/bookings/op/summary
+    // Response: { pending: <int>, approved: <int> }
+    [Authorize(Roles = "Backoffice,StationOperator")]
+    [HttpGet("op/summary")]
+    public async Task<IActionResult> GetOperatorSummary()
+    {
+        var pending = await _bookings.CountDocumentsAsync(b => b.Status == "Pending");
+        var approved = await _bookings.CountDocumentsAsync(b => b.Status == "Approved");
+
+        return Ok(new { pending, approved });
+    }
 }

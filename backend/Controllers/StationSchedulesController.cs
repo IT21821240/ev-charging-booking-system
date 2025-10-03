@@ -16,8 +16,9 @@ public class StationSchedulesController : ControllerBase
 
     public StationSchedulesController(IMongoDatabase db)
     {
-        _stations = db.GetCollection<Station>("Stations");
-        _schedules = db.GetCollection<StationSchedule>("StationSchedules");
+        _stations = db.GetCollection<Station>("stations");
+        _schedules = db.GetCollection<StationSchedule>("stationSchedules");
+        _bookings = db.GetCollection<Booking>("bookings");
     }
 
     // POST /api/stations/{id}/schedules
