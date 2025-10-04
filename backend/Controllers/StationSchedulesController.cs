@@ -1,4 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿// -----------------------------------------------------------------------------
+// File: StationSchedulesController.cs
+// Purpose: Station schedule management for operators/backoffice.
+//          Create/list/update/delete daily schedules and expose a public
+//          slots endpoint that computes availability from bookings.
+// -----------------------------------------------------------------------------
+using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 using Backend.Models;
 using Microsoft.AspNetCore.Authorization;

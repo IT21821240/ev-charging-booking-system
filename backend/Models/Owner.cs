@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// File: Owner.cs
+// Purpose: Represents an EV owner profile stored in MongoDB, including
+//          personal details, contact info, and account activity status.
+// -----------------------------------------------------------------------------
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using System.ComponentModel.DataAnnotations;

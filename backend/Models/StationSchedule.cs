@@ -1,6 +1,7 @@
 // -----------------------------------------------------------------------------
 // File: StationSchedule.cs
-// Purpose: Per-day opening hours and concurrent capacity for a station
+// Purpose: Represents the per-day operating schedule and maximum concurrent
+//          capacity for a charging station.
 // -----------------------------------------------------------------------------
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;

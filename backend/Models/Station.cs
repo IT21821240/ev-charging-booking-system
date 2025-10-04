@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// File: Station.cs
+// Purpose: Represents an EV charging station with its type, location,
+//          capacity, and operational status.
+// -----------------------------------------------------------------------------
 using System.ComponentModel.DataAnnotations;
 
 namespace Backend.Models;

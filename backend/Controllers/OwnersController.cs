@@ -1,4 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿// -----------------------------------------------------------------------------
+// File: OwnersController.cs
+// Purpose: EV Owner management endpoints for both web and mobile flows.
+//          Includes: mobile self-register (profile upsert + login), web CRUD,
+//          activate/deactivate/reactivate, secure profile read/update, paging,
+//          and counts. Controller-level [Authorize] ensures JWT by default.
+// -----------------------------------------------------------------------------
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using MongoDB.Driver;
 using System.Security.Claims;

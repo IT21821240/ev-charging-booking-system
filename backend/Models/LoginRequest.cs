@@ -1,3 +1,7 @@
+// -----------------------------------------------------------------------------
+// File: LoginRequest.cs
+// Purpose: Data Transfer Object (DTO) for handling user login requests.
+// -----------------------------------------------------------------------------
 namespace Backend.Models;
 public class LoginRequest
 {

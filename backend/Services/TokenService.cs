@@ -1,3 +1,7 @@
+// -----------------------------------------------------------------------------
+// File: TokenService.cs
+// Purpose: Implements JWT (JSON Web Token) generation for authenticated users.
+// -----------------------------------------------------------------------------
 using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;

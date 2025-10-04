@@ -1,4 +1,9 @@
-﻿namespace Backend.Models;
+﻿// -----------------------------------------------------------------------------
+// File: Booking.cs
+// Purpose: Represents a charging session booking with status, QR token tracking,
+//          and time window (StartTime–EndTime). Used by BookingsController.
+// -----------------------------------------------------------------------------
+namespace Backend.Models;
 
 public class Booking
 {

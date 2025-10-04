@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// File: RegisterRequest.cs
+// Purpose: Data Transfer Object (DTO) used for user registration requests,
+//          containing email, password, role, and optional NIC for EV owners.
+// -----------------------------------------------------------------------------
 namespace Backend.Models;
 public class RegisterRequest
 {

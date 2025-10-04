@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// File: StationsController.cs
+// Purpose: Manage EV charging stations: list, create, update, (de)activate,
+//          detail view (with optional expand), and basic counts.
+// -----------------------------------------------------------------------------
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 using Backend.Models;

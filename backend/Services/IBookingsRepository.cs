@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// File: BookingsRepository.cs
+// Purpose: Defines a repository interface and implementation for accessing
+//          and managing Booking data in the MongoDB database.
+// -----------------------------------------------------------------------------
 using Backend.Models;
 using MongoDB.Driver;
 

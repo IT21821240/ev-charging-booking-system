@@ -1,3 +1,8 @@
+// -----------------------------------------------------------------------------
+// File: QrTokenService.cs
+// Purpose: Provides functionality for generating short-lived JWT-based QR tokens
+//          for EV charging bookings. Used for secure station validation.
+// -----------------------------------------------------------------------------
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;

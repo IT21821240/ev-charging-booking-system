@@ -1,6 +1,7 @@
-// -----------------------------------------------------------------
+﻿// -----------------------------------------------------------------
 // File: BookingsController.cs
-// Purpose: Manage booking creation, update, cancel, approval + QR
+// Purpose: Manage EV charging bookings: create (≤7 days ahead), update/cancel
+//          (≥12h before start), approve/QR, finalize, and operator/owner queries.
 // -----------------------------------------------------------------
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;

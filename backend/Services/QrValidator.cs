@@ -1,7 +1,7 @@
-﻿// -----------------------------------------------------------------
-// File: Services/QrValidator.cs
-// Purpose: Validate QR JWT against booking + enforce rules
-// -----------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------
+// File: QrValidator.cs
+// Purpose: Provides QR JWT validation logic for EV booking verification.
+// -----------------------------------------------------------------------------
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;

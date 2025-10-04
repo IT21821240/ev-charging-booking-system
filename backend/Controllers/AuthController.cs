@@ -1,3 +1,12 @@
+/*
+-------------------------------------------------------------------------------------
+File Name    : AuthController.cs
+Description  : This controller handles user authentication and authorization 
+               operations for the web service. It includes functionalities for 
+               registering users, logging in, managing user accounts (activation/
+               deactivation/reactivation), and ensuring role-based access control.
+-------------------------------------------------------------------------------------
+*/
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using MongoDB.Driver;
@@ -14,19 +23,21 @@ public class AuthController : ControllerBase
     private readonly IMongoCollection<User> _users;
     private readonly ITokenService _tokens;
 
+    // Constructor: Initializes MongoDB user collection and token service.
     public AuthController(IMongoDatabase db, ITokenService tokens)
     {
         _users = db.GetCollection<User>("users");
         _tokens = tokens;
 
-        // indexes (see above snippet); safe to call once here
+        // Create a unique index on the Email field to prevent duplicate user entries.
         _users.Indexes.CreateOne(new CreateIndexModel<User>(
             Builders<User>.IndexKeys.Ascending(u => u.Email),
             new CreateIndexOptions { Unique = true, Name = "ux_users_email" }));
     }
 
     // ========= REGISTER (Backoffice only) =========
-    // Backoffice creates Backoffice/StationOperator users
+    // Method: Register
+    // Description: Allows Backoffice users to register new Backoffice or StationOperator accounts.
     [HttpPost("register")]
     [Authorize(Roles = "Backoffice")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
@@ -59,6 +70,8 @@ public class AuthController : ControllerBase
     }
 
     // ========= LOGIN =========
+    // Method: Login
+    // Description: Validates user credentials and issues a JWT token for authentication.
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
@@ -89,6 +102,8 @@ public class AuthController : ControllerBase
     }
 
     // ========= LIST USERS (Backoffice only) =========
+    // Method: GetUsers
+    // Description: Retrieves all registered users for management purposes.
     [HttpGet("users")]
     [Authorize(Roles = "Backoffice")]
     public async Task<ActionResult<List<UserDto>>> GetUsers()
@@ -108,6 +123,8 @@ public class AuthController : ControllerBase
     }
 
     // ========= DEACTIVATE (Backoffice only) =========
+    // Method: DeactivateUser
+    // Description: Deactivates a specific user account (and associated EV owner profile if applicable).
     [HttpPost("{id}/deactivate")]
     [Authorize(Roles = "Backoffice")]
     public async Task<IActionResult> DeactivateUser(string id)
@@ -153,6 +170,8 @@ public class AuthController : ControllerBase
     }
 
     // ========= REACTIVATE (Backoffice only) =========
+    // Method: ReactivateUser
+    // Description: Re-enables a deactivated user and their EV Owner profile if applicable.
     [HttpPost("{id}/reactivate")]
     [Authorize(Roles = "Backoffice")]
     public async Task<IActionResult> ReactivateUser(string id)
@@ -185,8 +204,9 @@ public class AuthController : ControllerBase
     }
 }
 
-    // Return shape for list users
-    public sealed class UserDto
+// ================= Data Transfer Object (DTO) =================
+// Purpose: Used to define a simplified version of the User model for API responses.
+public sealed class UserDto
 {
     public string Id { get; set; } = default!;     
     public string Email { get; set; } = default!; 
