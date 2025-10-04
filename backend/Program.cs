@@ -11,6 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 // 1) Load .env (optional) and register Mongo
 Env.Load(); // reads .env if present
 
+builder.Configuration.AddEnvironmentVariables();
+
 builder.Services.AddSingleton<IMongoClient>(_ =>
     new MongoClient(
         Environment.GetEnvironmentVariable("MONGO_CONNECTION_STRING")
@@ -54,7 +56,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddScoped<ITokenService, TokenService>();// our token helper
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddSingleton<IQrTokenService, QrTokenService>();
+builder.Services.AddScoped<IQrValidator, QrValidator>();
+builder.Services.AddScoped<IBookingsRepository, BookingsRepository>();
 
 builder.Services.AddCors(opt =>
 {
