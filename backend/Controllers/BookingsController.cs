@@ -37,7 +37,6 @@ public class BookingsController : ControllerBase
             // For QR validation and single-use marking
             new CreateIndexModel<Booking>(Builders<Booking>.IndexKeys
                 .Ascending(b => b.QrToken)
-                .Ascending(b => b.QrUsedAt)
                 .Ascending(b => b.QrExpiresAt))
         });
     }
@@ -65,8 +64,8 @@ public class BookingsController : ControllerBase
     public class CreateBookingRequest
     {
         public string StationId { get; set; } = default!;
-        public DateTime StartUtc { get; set; }
-        public DateTime EndUtc { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
     }
 
     // POST /api/bookings
@@ -74,65 +73,76 @@ public class BookingsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateBookingRequest req)
     {
-        // 1) Identity from JWT (do NOT accept from client)
         var nic = User.FindFirst("nic")?.Value;
         if (string.IsNullOrWhiteSpace(nic)) return Forbid();
 
-        // 2) Basic validations
-        if (req.EndUtc <= req.StartUtc) return BadRequest("Invalid slot.");
+        if (req.EndTime <= req.StartTime) return BadRequest("Invalid slot.");
 
-        // 3) Enforce “within 7 days” at create (and not in the past)
         var now = DateTime.UtcNow;
-        if (req.StartUtc.Date > now.Date.AddDays(7))
+        if (req.StartTime.Date > now.Date.AddDays(7))
             return BadRequest("Bookings must be within 7 days.");
-        if (req.StartUtc < now)
+        if (req.StartTime < now)
             return BadRequest("Cannot book past or started slots.");
 
-        // 4) Check schedule exists and slot is inside open/close for that day
         var sched = await _schedules.Find(s =>
                 s.StationId == req.StationId &&
-                s.Date == req.StartUtc.Date)
+                s.Date == req.StartTime.Date)
             .FirstOrDefaultAsync();
         if (sched == null) return BadRequest("No schedule for selected date.");
 
         var day = sched.Date.Date;
         var open = day.AddMinutes(sched.OpenMinutes);
         var close = day.AddMinutes(sched.CloseMinutes);
-        if (req.StartUtc < open || req.EndUtc > close)
+        if (req.StartTime < open || req.EndTime > close)
             return BadRequest("Slot is outside station schedule.");
 
-        // 5) Capacity: count overlapping bookings (Pending + Approved consume capacity)
         var overlapCount = await _bookings.CountDocumentsAsync(b =>
             b.StationId == req.StationId &&
             (b.Status == "Pending" || b.Status == "Approved") &&
-            b.StartTime < req.EndUtc && b.EndTime > req.StartUtc);
-
+            b.StartTime < req.EndTime && b.EndTime > req.StartTime);
         if (overlapCount >= sched.MaxConcurrent)
             return Conflict("Slot is full. Choose another slot.");
 
-        // 6) Prevent owner overlap
         var ownerOverlap = await _bookings.Find(b =>
             b.Nic == nic &&
             b.Status != "Cancelled" &&
-            b.StartTime < req.EndUtc && b.EndTime > req.StartUtc)
+            b.StartTime < req.EndTime && b.EndTime > req.StartTime)
             .AnyAsync();
-
         if (ownerOverlap)
             return Conflict("You already have a booking that overlaps this slot.");
 
-        // 7) Create booking (Pending; approval will issue QR)
         var booking = new Booking
         {
             StationId = req.StationId,
             Nic = nic,
-            StartTime = req.StartUtc,
-            EndTime = req.EndUtc,
+            StartTime = req.StartTime,
+            EndTime = req.EndTime,
             Status = "Pending",
-            CreatedAt = now
+            CreatedAt = now,
+            IsQrActive = false
         };
 
+        var qrSvc = HttpContext.RequestServices.GetRequiredService<IQrTokenService>();
+        var (jwt, jti, expUtc) = qrSvc.GenerateFor(booking);
+
+        booking.QrToken = jwt;
+        booking.QrJti = jti;
+        booking.QrIssuedAtUtc = DateTime.UtcNow;
+        booking.QrExpiresAt = expUtc;
+
         await _bookings.InsertOneAsync(booking);
-        return Ok(booking);
+
+        return Ok(new
+        {
+            booking.Id,
+            booking.StationId,
+            booking.StartTime,
+            booking.EndTime,
+            booking.Status,
+            booking.IsQrActive,
+            booking.QrToken,
+            booking.QrExpiresAt
+        });
     }
 
     // -------------------- Update / Cancel --------------------
@@ -189,7 +199,9 @@ public class BookingsController : ControllerBase
         }
 
         await _bookings.UpdateOneAsync(x => x.Id == id,
-            Builders<Booking>.Update.Set(x => x.Status, "Cancelled"));
+            Builders<Booking>.Update
+        .Set(x => x.Status, "Cancelled")
+        .Set(x => x.IsQrActive, false));
         return NoContent();
     }
 
@@ -198,61 +210,34 @@ public class BookingsController : ControllerBase
     // Generates a URL-safe random token, sets expiry and keeps single-use fields
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpPost("{id}/approve")]
+    [Authorize(Roles = "Backoffice,StationOperator")]
     public async Task<IActionResult> Approve(string id)
     {
         var b = await _bookings.Find(x => x.Id == id).FirstOrDefaultAsync();
         if (b == null) return NotFound();
         if (b.Status != "Pending") return Conflict("Only pending bookings can be approved.");
 
-        // Short, URL-safe token for QR (base64url of 24 random bytes)
-        var bytes = RandomNumberGenerator.GetBytes(24); // 192-bit
-        var token = Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
-
-        var now = DateTime.UtcNow;
-        var expiresAt = b.EndTime.AddMinutes(30); // valid 30m after session ends
-
-        var res = await _bookings.UpdateOneAsync(x => x.Id == id,
+        await _bookings.UpdateOneAsync(x => x.Id == id,
             Builders<Booking>.Update
-                .Set(x => x.Status, "Approved")
-                .Set(x => x.QrToken, token)
-                .Set(x => x.QrIssuedAt, now)
-                .Set(x => x.QrExpiresAt, expiresAt)
-                .Set(x => x.QrUsedAt, null));
+            .Set(x => x.Status, "Approved")
+            .Set(x => x.IsQrActive, true));
 
-        if (res.MatchedCount == 0) return NotFound();
-        return Ok(new { message = "Approved", qrToken = token, expiresAt });
+        return Ok(new { message = "Approved" });
     }
-
-    public class ValidateQrRequest { public string Token { get; set; } = default!; }
 
     // POST /api/bookings/scan/validate
     // Validates QR token and marks it single-use
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpPost("scan/validate")]
-    public async Task<IActionResult> ValidateQr([FromBody] ValidateQrRequest body)
+    public async Task<IActionResult> ValidateQr(
+    [FromBody] ValidateQrRequest body,
+    [FromServices] IQrValidator validator)
     {
         if (string.IsNullOrWhiteSpace(body.Token))
             return BadRequest("Missing token.");
 
-        var now = DateTime.UtcNow;
-
-        // Find the booking with matching token that isn't used and not expired
-        var b = await _bookings.Find(x =>
-                x.QrToken == body.Token &&
-                x.Status == "Approved" &&
-                x.QrUsedAt == null &&
-                x.QrExpiresAt > now)
-            .FirstOrDefaultAsync();
-
-        if (b is null) return Unauthorized("Invalid or expired QR token.");
-
-        // Single-use: mark used atomically (filter includes QrUsedAt==null to prevent races)
-        var updateResult = await _bookings.UpdateOneAsync(x =>
-                x.Id == b.Id && x.QrUsedAt == null,
-            Builders<Booking>.Update.Set(x => x.QrUsedAt, now));
-
-        if (updateResult.ModifiedCount == 0)
-            return Conflict("QR already used.");
+        var (ok, error, b) = await validator.ValidateAsync(body.Token);
+        if (!ok) return Unauthorized(error);
 
         return Ok(new
         {
@@ -271,7 +256,9 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> Finalize(string id)
     {
         var res = await _bookings.UpdateOneAsync(x => x.Id == id,
-            Builders<Booking>.Update.Set(x => x.Status, "Completed"));
+            Builders<Booking>.Update
+        .Set(x => x.Status, "Completed")
+        .Set(x => x.IsQrActive, false));
         return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Session completed" });
     }
 

@@ -10,14 +10,14 @@ public class Booking
 
     // Pending | Approved | Cancelled | Completed
     public string Status { get; set; } = "Pending";
+    public bool IsQrActive { get; set; } = false;
 
-    // Set when approved
-    public string? QrToken { get; set; }
-
-    // 🔽🔽 add these
-    public DateTime? QrIssuedAt { get; set; }
-    public DateTime? QrExpiresAt { get; set; }
-    public DateTime? QrUsedAt { get; set; }
+    // QR tracking
+    public string QrJti { get; set; }               // single-use id
+    public string QrToken { get; set; }             // the JWT string
+    public DateTime? QrIssuedAtUtc { get; set; }
+    public DateTime? QrExpiresAt { get; set; }         // End + 30m
+    public DateTime? QrValidatedAtUtc { get; set; }    // set on first successful scan
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
