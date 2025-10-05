@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { owners } from "../api/client";
 
+const NIC_RX = /^(?:\d{9}[VvXx]|\d{12})$/;              // <-- 9 digits + V/X or 12 digits
+const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;          // simple email check
+const PHONE_RX = /^[0-9+\-()\s]{6,}$/;                  // loose phone check
+
 export default function OwnersPage() {
   // tabs: 'browse' | 'create' | 'details'
   const [tab, setTab] = useState("browse");
@@ -33,10 +37,18 @@ export default function OwnersPage() {
           q: debouncedQ.trim(),
           isActive: isActive === "" ? undefined : isActive === "true",
         });
-        setRows(res.items || []);
-        setTotal(res.total || 0);
+
+        // ---- normalize shape (isActive vs active) ----
+        const items = (res.items || res || []).map(r => ({
+          ...r,
+          isActive: r.isActive ?? r.active ?? false,
+        }));
+        const totalCount = res.total ?? (Array.isArray(res) ? res.length : 0);
+
+        setRows(items);
+        setTotal(totalCount);
       } catch (e) {
-        console.error("Failed to load owners", e);
+        setMsg(e.message || "Failed to load owners");
         setRows([]);
         setTotal(0);
       }
@@ -46,8 +58,11 @@ export default function OwnersPage() {
   async function loadOwner(nic) {
     setMsg("");
     try {
-      const o = await owners.get(nic);
-      setOwner(o);
+      const o = await owners.get(nic.trim());
+      setOwner({
+        ...o,
+        isActive: o.isActive ?? o.active ?? false,   // <-- normalize detail too
+      });
       setTab("details");
     } catch (e) {
       setOwner(null);
@@ -58,9 +73,34 @@ export default function OwnersPage() {
   async function onCreate(e) {
     e.preventDefault();
     setMsg("");
+
+    // ---- trim + validate ----
+    const payload = {
+      nic: form.nic.trim(),
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+    };
+    if (!NIC_RX.test(payload.nic)) {
+      setMsg("Invalid NIC format (use 9 digits + V/X or 12 digits).");
+      return;
+    }
+    if (!payload.name) {
+      setMsg("Name is required.");
+      return;
+    }
+    if (payload.email && !EMAIL_RX.test(payload.email)) {
+      setMsg("Invalid email.");
+      return;
+    }
+    if (payload.phone && !PHONE_RX.test(payload.phone)) {
+      setMsg("Invalid phone.");
+      return;
+    }
+
     try {
-      const res = await owners.create(form);
-      const createdNic = res?.nic || res?.owner?.nic || form.nic;
+      const res = await owners.create(payload);
+      const createdNic = res?.nic || res?.owner?.nic || payload.nic;
       await loadOwner(createdNic);
       setForm({ nic: "", name: "", email: "", phone: "" });
       setMsg("Owner created");
@@ -73,12 +113,28 @@ export default function OwnersPage() {
   async function onUpdate() {
     if (!owner) return;
     setMsg("");
+
+    // ---- basic validation on update ----
+    const upd = {
+      name: (owner.name || "").trim(),
+      email: (owner.email || "").trim(),
+      phone: (owner.phone || "").trim(),
+    };
+    if (!upd.name) {
+      setMsg("Name is required.");
+      return;
+    }
+    if (upd.email && !EMAIL_RX.test(upd.email)) {
+      setMsg("Invalid email.");
+      return;
+    }
+    if (upd.phone && !PHONE_RX.test(upd.phone)) {
+      setMsg("Invalid phone.");
+      return;
+    }
+
     try {
-      await owners.update(owner.nic, {
-        name: owner.name,
-        email: owner.email,
-        phone: owner.phone,
-      });
+      await owners.update(owner.nic, upd);
       setMsg("Owner updated");
     } catch (err) {
       setMsg(err.message || "Update failed");
@@ -264,7 +320,7 @@ export default function OwnersPage() {
                   className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
                   placeholder="NIC *"
                   value={form.nic}
-                  onChange={(e) => setForm({ ...form, nic: e.target.value })}
+                  onChange={(e) => setForm({ ...form, nic: e.target.value.trim() })}
                   required
                 />
                 <input
@@ -300,6 +356,10 @@ export default function OwnersPage() {
                   >
                     Create
                   </button>
+                </div>
+                {/* inline guidance */}
+                <div className="sm:col-span-2 text-xs text-gray-500">
+                  NIC formats accepted: <code>#########V</code>/<code>#########X</code> or <code>############</code>
                 </div>
               </form>
             </div>

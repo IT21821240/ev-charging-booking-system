@@ -60,11 +60,11 @@ export default function TopBar() {
             className="group flex items-center gap-2 rounded px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
             aria-label="Go to dashboard"
           >
-            <div className="grid h-7 w-7 place-items-center rounded-md bg-gray-900 text-white text-[11px] font-semibold">
-              EV
+            <div className="grid h-7 w-12 place-items-center rounded-md bg-gray-900 text-white text-[11px] font-semibold">
+              Plug It
             </div>
             <span className="text-sm font-semibold tracking-tight text-gray-900">
-              Charging Admin
+              Admin
             </span>
           </button>
 

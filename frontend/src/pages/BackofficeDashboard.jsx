@@ -1,9 +1,34 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { bookings, owners, stations } from "../api/client";
 
-export default function BackofficeDashboard({
-  stats = { owners: null, stations: null, pendingBookings: null },
-}) {
+export default function BackofficeDashboard() {
+  const [stats, setStats] = useState({
+    owners: null,
+    stations: null,
+    pendingBookings: null,
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [ownersCount, stationsCount, summary] = await Promise.all([
+          owners.ownersCount(),         // -> { total }
+          stations.stationsCount(),     // -> { total }
+          bookings.bookingsSummary(),    // -> { pending, approved }
+        ]);
+        setStats({
+          owners: ownersCount?.total ?? 0,
+          stations: stationsCount?.total ?? 0,
+          pendingBookings: summary?.pending ?? 0,
+        });
+      } catch (e) {
+        console.error("Failed to load dashboard stats:", e);
+        // keep nulls so UI shows "—"
+      }
+    })();
+  }, []);
+
   const Stat = ({ label, value, to, icon }) => (
     <Link
       to={to}
@@ -109,7 +134,7 @@ export default function BackofficeDashboard({
             <Link to="/owners" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
               View all
             </Link>
-            <Link to="/owners" className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm text-white hover:brightness-95">
+            <Link to="/owners/new" className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm text-white hover:brightness-95">
               Add owner
             </Link>
           </div>
@@ -140,7 +165,9 @@ export default function BackofficeDashboard({
           <div className="mt-3">
             <Link to="/bookings?status=Pending" className="inline-flex items-center gap-2 text-sm font-medium text-gray-900 hover:underline">
               Go to approvals
-              {Arrow}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M12.293 5.293a1 1 0 011.414 1.414L10.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4z" />
+              </svg>
             </Link>
           </div>
         </div>

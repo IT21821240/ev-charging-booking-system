@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
+
 import Login from "./pages/Login";
 import BackofficeDashboard from "./pages/BackofficeDashboard";
 import OperatorDashboard from "./pages/OperatorDashboard";
@@ -11,14 +12,26 @@ import BookingsPage from "./pages/BookingsPage";
 import UsersPage from "./pages/UsersPage";
 import OperatorQR from "./pages/OperatorQR";
 import StationSchedulesPage from "./pages/StationSchedulesPage";
+import { useAuth } from "./auth/AuthContext";
+
+function RoleLanding() {
+  const { user } = useAuth();
+  if (!user?.token) return <Navigate to="/login" replace />;
+  if (user.role === "Backoffice") return <Navigate to="/backoffice" replace />;
+  if (user.role === "StationOperator") return <Navigate to="/operator" replace />;
+  return <Navigate to="/login" replace />;
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public */}
           <Route path="/login" element={<Login />} />
+          <Route path="/" element={<RoleLanding />} />
 
+          {/* Backoffice-only */}
           <Route
             path="/backoffice"
             element={
@@ -27,7 +40,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/admin/users"
             element={
@@ -36,16 +48,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
-          <Route
-            path="/operator"
-            element={
-              <ProtectedRoute roles={["StationOperator"]}>
-                <OperatorDashboard />
-              </ProtectedRoute>
-            }
-          />
-
           <Route
             path="/owners"
             element={
@@ -55,6 +57,17 @@ export default function App() {
             }
           />
 
+          {/* Operator-only */}
+          <Route
+            path="/operator"
+            element={
+              <ProtectedRoute roles={["StationOperator"]}>
+                <OperatorDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Shared: Backoffice + StationOperator */}
           <Route
             path="/stations"
             element={
@@ -63,7 +76,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/bookings"
             element={
@@ -72,28 +84,28 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
-          {/* moved inside <Routes> */}
+          {/* Schedules: allow BOTH roles, and use a neutral path */}
           <Route
-            path="/operator/qr"
+            path="/stations/:stationId/schedules"
             element={
-              <ProtectedRoute roles={["StationOperator"]}>
-                <OperatorQR />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/backoffice/stations/:stationId/schedules"
-            element={
-              <ProtectedRoute roles={["Backoffice"]}>
+              <ProtectedRoute roles={["Backoffice", "StationOperator"]}>
                 <StationSchedulesPage />
               </ProtectedRoute>
             }
           />
 
+          {/* QR page: allow both roles (optional) */}
+          <Route
+            path="/operator/qr"
+            element={
+              <ProtectedRoute roles={["Backoffice", "StationOperator"]}>
+                <OperatorQR />
+              </ProtectedRoute>
+            }
+          />
+
           {/* catch-all */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

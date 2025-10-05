@@ -14,9 +14,8 @@ function minutesToHhmm(min) {
   return `${h}:${m}`;
 }
 /* -------- date helpers for inputs -------- */
-function toDateInputValue(d) {
-  // "YYYY-MM-DD" from Date
-  return d.toISOString().slice(0, 10);
+function dateToInput(d) {
+  return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
 
 export default function StationSchedulesPage() {
@@ -25,23 +24,25 @@ export default function StationSchedulesPage() {
 
   const [stationId, setStationId] = useState(paramId || "");
   const [stationList, setStationList] = useState([]);
+
+  // normalized rows: { id, date: "YYYY-MM-DD", openMinutes, closeMinutes, maxConcurrent }
   const [rows, setRows] = useState([]);
 
   const today = useMemo(() => new Date(), []);
   const weekAhead = useMemo(() => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), []);
-  const [fromDate, setFromDate] = useState(toDateInputValue(today));
-  const [toDate, setToDate] = useState(toDateInputValue(weekAhead));
+  const [fromDate, setFromDate] = useState(dateToInput(today));
+  const [toDate, setToDate] = useState(dateToInput(weekAhead));
 
-  // form for create
+  // create form
   const [form, setForm] = useState({
-    date: toDateInputValue(today),   // <input type="date">
+    date: dateToInput(today),
     open: "08:00",
     close: "18:00",
     maxConcurrent: 1,
   });
 
-  // inline edit
-  const [edit, setEdit] = useState(null); // { id, Date, OpenMinutes, CloseMinutes, MaxConcurrent }
+  // edit buffer (normalized)
+  const [edit, setEdit] = useState(null); // { id, date, openMinutes, closeMinutes, maxConcurrent, _openHHMM, _closeHHMM }
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -52,19 +53,33 @@ export default function StationSchedulesPage() {
         const s = await stations.list();
         setStationList(s?.items || s || []);
       } catch (e) {
-        console.error("Failed to load stations", e);
+        setMsg(e.message || "Failed to load stations.");
       }
     })();
   }, []);
 
-  // load schedules when stationId or range changes
+  // load schedules when station/range changes
   useEffect(() => {
     if (!stationId) return;
     (async () => {
       setMsg("");
       try {
-        const items = await schedules.list(stationId, { from: fromDate, to: toDate });
-        setRows(Array.isArray(items) ? items : items?.items || []);
+        const raw = await schedules.list(stationId, { from: fromDate, to: toDate });
+        const arr = Array.isArray(raw) ? raw : raw?.items || [];
+        // normalize to one shape
+        const norm = arr.map(r => {
+          const id = r.id ?? r.Id;
+          const dateIso = r.date ?? r.Date; // backend might send either
+          const date = dateIso ? new Date(dateIso).toISOString().slice(0, 10) : "";
+          return {
+            id,
+            date,
+            openMinutes: r.openMinutes ?? r.OpenMinutes ?? 0,
+            closeMinutes: r.closeMinutes ?? r.CloseMinutes ?? 0,
+            maxConcurrent: r.maxConcurrent ?? r.MaxConcurrent ?? 1,
+          };
+        });
+        setRows(norm);
       } catch (e) {
         setRows([]);
         setMsg(e.message || "Failed to load schedules.");
@@ -82,14 +97,22 @@ export default function StationSchedulesPage() {
     setBusy(true); setMsg("");
     try {
       await schedules.create(stationId, {
-        Date: new Date(form.date).toISOString(),
-        OpenMinutes: openM,
-        CloseMinutes: closeM,
-        MaxConcurrent: Number(form.maxConcurrent || 1),
+        date: form.date, // <-- "YYYY-MM-DD"
+        openMinutes: openM,
+        closeMinutes: closeM,
+        maxConcurrent: Number(form.maxConcurrent || 1),
       });
-      // reload list within window
-      const items = await schedules.list(stationId, { from: fromDate, to: toDate });
-      setRows(Array.isArray(items) ? items : items?.items || []);
+      // reload
+      const raw = await schedules.list(stationId, { from: fromDate, to: toDate });
+      const arr = Array.isArray(raw) ? raw : raw?.items || [];
+      const norm = arr.map(r => ({
+        id: r.id ?? r.Id,
+        date: (r.date ?? r.Date) ? new Date(r.date ?? r.Date).toISOString().slice(0, 10) : "",
+        openMinutes: r.openMinutes ?? r.OpenMinutes ?? 0,
+        closeMinutes: r.closeMinutes ?? r.CloseMinutes ?? 0,
+        maxConcurrent: r.maxConcurrent ?? r.MaxConcurrent ?? 1,
+      }));
+      setRows(norm);
       setMsg("Added.");
     } catch (e) {
       setMsg(e.message || "Failed to add.");
@@ -107,15 +130,23 @@ export default function StationSchedulesPage() {
 
     setBusy(true); setMsg("");
     try {
-      await schedules.update(stationId, edit.id || edit.Id, {
-        Date: new Date(edit._dateStr).toISOString(),
-        OpenMinutes: openM,
-        CloseMinutes: closeM,
-        MaxConcurrent: Number(edit.MaxConcurrent || 1),
+      await schedules.update(stationId, edit.id, {
+        date: edit.date,            // <-- "YYYY-MM-DD"
+        openMinutes: openM,
+        closeMinutes: closeM,
+        maxConcurrent: Number(edit.maxConcurrent || 1),
       });
       setEdit(null);
-      const items = await schedules.list(stationId, { from: fromDate, to: toDate });
-      setRows(Array.isArray(items) ? items : items?.items || []);
+      const raw = await schedules.list(stationId, { from: fromDate, to: toDate });
+      const arr = Array.isArray(raw) ? raw : raw?.items || [];
+      const norm = arr.map(r => ({
+        id: r.id ?? r.Id,
+        date: (r.date ?? r.Date) ? new Date(r.date ?? r.Date).toISOString().slice(0, 10) : "",
+        openMinutes: r.openMinutes ?? r.OpenMinutes ?? 0,
+        closeMinutes: r.closeMinutes ?? r.CloseMinutes ?? 0,
+        maxConcurrent: r.maxConcurrent ?? r.MaxConcurrent ?? 1,
+      }));
+      setRows(norm);
       setMsg("Updated.");
     } catch (e) {
       setMsg(e.message || "Failed to update.");
@@ -129,8 +160,17 @@ export default function StationSchedulesPage() {
     setBusy(true); setMsg("");
     try {
       await schedules.remove(stationId, id);
-      const items = await schedules.list(stationId, { from: fromDate, to: toDate });
-      setRows(Array.isArray(items) ? items : items?.items || []);
+      // reload
+      const raw = await schedules.list(stationId, { from: fromDate, to: toDate });
+      const arr = Array.isArray(raw) ? raw : raw?.items || [];
+      const norm = arr.map(r => ({
+        id: r.id ?? r.Id,
+        date: (r.date ?? r.Date) ? new Date(r.date ?? r.Date).toISOString().slice(0, 10) : "",
+        openMinutes: r.openMinutes ?? r.OpenMinutes ?? 0,
+        closeMinutes: r.closeMinutes ?? r.CloseMinutes ?? 0,
+        maxConcurrent: r.maxConcurrent ?? r.MaxConcurrent ?? 1,
+      }));
+      setRows(norm);
       setMsg("Deleted.");
     } catch (e) {
       setMsg(e.message || "Failed to delete.");
@@ -139,15 +179,14 @@ export default function StationSchedulesPage() {
     }
   }
 
-  // map backend row to editable state
-  function startEdit(row) {
-    setEdit({
-      ...(row || {}),
-      _dateStr: (row?.Date ? new Date(row.Date).toISOString().slice(0,10) : toDateInputValue(today)),
-      _openHHMM: minutesToHhmm(row?.OpenMinutes),
-      _closeHHMM: minutesToHhmm(row?.CloseMinutes),
-    });
-  }
+  // // begin editing with normalized row
+  // function startEdit(row) {
+  //   setEdit({
+  //     ...row,
+  //     _openHHMM: minutesToHhmm(row.openMinutes),
+  //     _closeHHMM: minutesToHhmm(row.closeMinutes),
+  //   });
+  // }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -161,10 +200,10 @@ export default function StationSchedulesPage() {
             className="border rounded p-2 min-w-60"
             value={stationId}
             onChange={(e) => {
-              setStationId(e.target.value);
-              if (paramId && e.target.value !== paramId) {
-                nav(`/backoffice/stations/${e.target.value}/schedules`);
-              }
+              const id = e.target.value;
+              setStationId(id);
+              // neutral route per our router setup
+              if (paramId && id !== paramId) nav(`/stations/${id}/schedules`);
             }}
           >
             <option value="">-- select --</option>
@@ -267,20 +306,19 @@ export default function StationSchedulesPage() {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const id = r.id || r.Id;
-              const isEditing = edit && (edit.id === id || edit.Id === id);
+              const isEditing = edit && edit.id === r.id;
               return (
-                <tr key={id} className="border-b">
+                <tr key={r.id} className="border-b">
                   <td className="p-3">
                     {isEditing ? (
                       <input
                         type="date"
                         className="border rounded p-1"
-                        value={edit._dateStr}
-                        onChange={(e) => setEdit({ ...edit, _dateStr: e.target.value })}
+                        value={edit.date}
+                        onChange={(e) => setEdit({ ...edit, date: e.target.value })}
                       />
                     ) : (
-                      (r.Date && new Date(r.Date).toISOString().slice(0,10)) || "-"
+                      r.date || "-"
                     )}
                   </td>
                   <td className="p-3">
@@ -292,7 +330,7 @@ export default function StationSchedulesPage() {
                         onChange={(e) => setEdit({ ...edit, _openHHMM: e.target.value })}
                       />
                     ) : (
-                      minutesToHhmm(r.OpenMinutes)
+                      minutesToHhmm(r.openMinutes)
                     )}
                   </td>
                   <td className="p-3">
@@ -304,10 +342,10 @@ export default function StationSchedulesPage() {
                         onChange={(e) => setEdit({ ...edit, _closeHHMM: e.target.value })}
                       />
                     ) : (
-                      minutesToHhmm(r.CloseMinutes)
+                      minutesToHhmm(r.closeMinutes)
                     )}
                   </td>
-                  <td className="p-3">{r.MaxConcurrent}</td>
+                  <td className="p-3">{r.maxConcurrent}</td>
                   <td className="p-3">
                     {isEditing ? (
                       <>
@@ -326,13 +364,19 @@ export default function StationSchedulesPage() {
                       <>
                         <button
                           className="px-3 py-1 border rounded mr-2"
-                          onClick={() => startEdit({ ...r, id })}
+                          onClick={() =>
+                            setEdit({
+                              ...r,
+                              _openHHMM: minutesToHhmm(r.openMinutes),
+                              _closeHHMM: minutesToHhmm(r.closeMinutes),
+                            })
+                          }
                         >
                           Edit
                         </button>
                         <button
                           className="px-3 py-1 bg-red-600 text-white rounded"
-                          onClick={() => onDelete(id)}
+                          onClick={() => onDelete(r.id)}
                         >
                           Delete
                         </button>

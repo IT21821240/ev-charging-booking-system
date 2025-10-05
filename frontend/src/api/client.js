@@ -54,8 +54,8 @@ export const login = (email, password) =>
 export const users = {
   create: (body) => api(`/auth/register`, { method: "POST", body }),
   list: () => api(`/auth/users`),
-  deactivate: (id) => api(`/auth/${id}/deactivate`, { method: "POST" }),
-  reactivate: (id) => api(`/auth/${id}/reactivate`, { method: "POST" }),
+  deactivate: (id) => api(`/auth/${encodeURIComponent(id)}/deactivate`, { method: "POST" }),
+ reactivate: (id) => api(`/auth/${encodeURIComponent(id)}/reactivate`, { method: "POST" }),
 };
 
 // -------- Owners (Backoffice) --------
@@ -70,6 +70,8 @@ export const owners = {
   update: (nic, body) => api(`/owners/${nic}`, { method: "PUT", body }),
   deactivate: (nic) => api(`/owners/${nic}/deactivate`, { method: "POST" }),
   reactivate: (nic) => api(`/owners/${nic}/reactivate`, { method: "POST" }),
+  ownersCount:  (isActive) =>
+    api(`/owners/count${typeof isActive === "boolean" ? `?isActive=${isActive}` : ""}`),
 };
 
 // -------- Stations (Backoffice / StationOperator) --------
@@ -79,23 +81,33 @@ export const stations = {
   update: (id, body) => api(`/stations/${id}`, { method: "PUT", body }),
   deactivate: (id) => api(`/stations/${id}/deactivate`, { method: "POST" }),
   reactivate: (id) => api(`/stations/${id}/reactivate`, { method: "POST" }),
+  get: (id) => api(`/stations/${encodeURIComponent(id)}`),
+  stationsCount:(isActive) =>
+    api(`/stations/count${typeof isActive === "boolean" ? `?isActive=${isActive}` : ""}`),
 };
 
-// -------- Bookings (Backoffice / StationOperator) --------
+// -------- Bookings (Backoffice / StationOperator / Owner) --------
 export const bookings = {
   list: (params = {}) => {
     const qs = new URLSearchParams(params);
     const suffix = qs.toString() ? `?${qs}` : "";
     return api(`/bookings${suffix}`);
   },
+  listPending: () => api(`/bookings/pending`),   // <-- Added
   create: (body) => api(`/bookings`, { method: "POST", body }),
   update: (id, body) => api(`/bookings/${id}`, { method: "PUT", body }),
   cancel: (id) => api(`/bookings/${id}`, { method: "DELETE" }),
   approve: (id) => api(`/bookings/${id}/approve`, { method: "POST" }),
   validateQr: (token) =>
-    api(`/bookings/validate-qr?token=${encodeURIComponent(token)}`),
+    api(`/bookings/scan/validate`, {               // <-- Fixed
+      method: "POST",
+      body: { token }
+    }),
   finalize: (id) => api(`/bookings/${id}/finalize`, { method: "POST" }),
   get: (id) => api(`/bookings/${encodeURIComponent(id)}`),
+  listApproved: () => api('/bookings/approved'),
+  listCompleted: () => api('/bookings/completed'),
+  bookingsSummary: () => api('/bookings/op/summary'), 
 };
 
 export const schedules = {
@@ -104,15 +116,17 @@ export const schedules = {
       `/stations/${encodeURIComponent(stationId)}/schedules?` +
       new URLSearchParams({ from, to }).toString()
     ),
-  create: (stationId, body) =>
+   create: (stationId, body) =>
     api(`/stations/${encodeURIComponent(stationId)}/schedules`, {
       method: "POST",
-      body, // { Date, OpenMinutes, CloseMinutes, MaxConcurrent }
+      // include both casings to satisfy any [Required] on StationId
+      body: { StationId: stationId, stationId, ...body },
     }),
-  update: (_stationId, scheduleId, body) =>
+   update: (stationId, scheduleId, body) =>
     api(`/schedules/${encodeURIComponent(scheduleId)}`, {
       method: "PUT",
-      body, // { Date, OpenMinutes, CloseMinutes, MaxConcurrent }
+      // harmless if backend ignores it; avoids 400 if model requires it
+      body: { StationId: stationId, stationId, ...body },
     }),
   remove: (_stationId, scheduleId) =>
     api(`/schedules/${encodeURIComponent(scheduleId)}`, { method: "DELETE" }),
