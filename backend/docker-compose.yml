@@ -10,6 +10,8 @@ services:
       JWT_KEY: ${JWT_KEY}
       JWT_ISSUER: ${JWT_ISSUER:-evcs.api}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-evcs.clients}
+      Jwt__AuthSigningKey: ${Jwt__AuthSigningKey}
+      Jwt__QRSigningKey: ${Jwt__QRSigningKey}
       ASPNETCORE_URLS: http://+:5014
       ASPNETCORE_ENVIRONMENT: Production
     ports:
