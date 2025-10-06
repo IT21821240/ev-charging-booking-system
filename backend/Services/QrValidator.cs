@@ -82,8 +82,11 @@ namespace Backend.Services
                 return (false, "QR invalid or replaced.", null);
 
             // Optional time window guard (in addition to 'exp'):
-            var now = DateTime.UtcNow;
-            if (now < b.StartTime.AddMinutes(-15) || now > b.EndTime.AddMinutes(30))
+            var nowLocal = TimezoneHelper.ToLocal(DateTime.UtcNow, "Asia/Colombo");
+            var startLocal = TimezoneHelper.ToLocal(b.StartTime, "Asia/Colombo");
+            var endLocal = TimezoneHelper.ToLocal(b.EndTime, "Asia/Colombo");
+
+            if (nowLocal < startLocal.AddMinutes(-15) || nowLocal > endLocal.AddMinutes(30))
                 return (false, "QR not valid at this time.", null);
 
             // ✅ No longer marking QR as used — just validation

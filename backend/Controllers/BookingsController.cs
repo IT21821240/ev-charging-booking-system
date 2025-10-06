@@ -9,6 +9,8 @@ using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Cryptography;
+using static Backend.Services.BookingMapping;     
+using static Backend.Services.TimezoneHelper;
 
 namespace Backend.Controllers;
 
@@ -55,10 +57,14 @@ public class BookingsController : ControllerBase
                 return Forbid();
         }
 
+        var tz = HttpContext.Request.Query["tz"].ToString();
+        if (string.IsNullOrWhiteSpace(tz)) tz = "Asia/Colombo";
+
         var list = await _bookings.Find(b => b.Nic == nic)
                                   .SortByDescending(b => b.StartTime)
                                   .ToListAsync();
-        return Ok(list);
+
+        return Ok(list.Select(b => ToDto(b, tz)));
     }
 
     // ----------------------- Create -----------------------
@@ -67,6 +73,10 @@ public class BookingsController : ControllerBase
         public string StationId { get; set; } = default!;
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
+        // NEW: local inputs (preferred for Sri Lanka)
+        public DateTime? StartTimeLocal { get; set; } // unspecified wall time
+        public DateTime? EndTimeLocal { get; set; }
+        public string? TimeZoneId { get; set; } // default "Asia/Colombo"
     }
 
     // POST /api/bookings
@@ -77,47 +87,76 @@ public class BookingsController : ControllerBase
         var nic = User.FindFirst("nic")?.Value;
         if (string.IsNullOrWhiteSpace(nic)) return Forbid();
 
-        if (req.EndTime <= req.StartTime) return BadRequest("Invalid slot.");
+        var tz = req.TimeZoneId ?? "Asia/Colombo";
+
+        // Decide input mode
+        DateTime startUtc, endUtc, startLocal, endLocal;
+        if (req.StartTimeLocal.HasValue && req.EndTimeLocal.HasValue)
+        {
+            // Client sent local wall times (preferred for Sri Lanka)
+            startLocal = DateTime.SpecifyKind(req.StartTimeLocal.Value, DateTimeKind.Unspecified);
+            endLocal = DateTime.SpecifyKind(req.EndTimeLocal.Value, DateTimeKind.Unspecified);
+            startUtc = ToUtcFromLocal(startLocal, tz);
+            endUtc = ToUtcFromLocal(endLocal, tz);
+        }
+        else
+        {
+            // Client sent UTC
+            startUtc = DateTime.SpecifyKind(req.StartTime, DateTimeKind.Utc);
+            endUtc = DateTime.SpecifyKind(req.EndTime, DateTimeKind.Utc);
+            // derive local for schedule validation
+            startLocal = ToLocal(startUtc, tz);
+            endLocal = ToLocal(endUtc, tz);
+        }
+
+        if (endUtc <= startUtc) return BadRequest("Invalid slot.");
 
         var now = DateTime.UtcNow;
-        if (req.StartTime.Date > now.Date.AddDays(7))
+        if (startUtc.Date > now.Date.AddDays(7))
             return BadRequest("Bookings must be within 7 days.");
-        if (req.StartTime < now)
+        if (startUtc < now)
             return BadRequest("Cannot book past or started slots.");
 
+        // -------- Schedule validation in LOCAL day ----------
+        var dayLocal = DateTime.SpecifyKind(startLocal.Date, DateTimeKind.Unspecified);
+        var next = dayLocal.AddDays(1);
+
+        // Find schedule by range (robust against Kind/Date translation)
         var sched = await _schedules.Find(s =>
-                s.StationId == req.StationId &&
-                s.Date == req.StartTime.Date)
-            .FirstOrDefaultAsync();
+            s.StationId == req.StationId &&
+            s.Date >= dayLocal && s.Date < next
+        ).FirstOrDefaultAsync();
+
         if (sched == null) return BadRequest("No schedule for selected date.");
 
-        var day = sched.Date.Date;
-        var open = day.AddMinutes(sched.OpenMinutes);
-        var close = day.AddMinutes(sched.CloseMinutes);
-        if (req.StartTime < open || req.EndTime > close)
+        var openLocal = dayLocal.AddMinutes(sched.OpenMinutes);
+        var closeLocal = dayLocal.AddMinutes(sched.CloseMinutes);
+
+        if (startLocal < openLocal || endLocal > closeLocal)
             return BadRequest("Slot is outside station schedule.");
 
+        // -------- Overlap checks in UTC (DB stored UTC) ----------
         var overlapCount = await _bookings.CountDocumentsAsync(b =>
             b.StationId == req.StationId &&
             (b.Status == "Pending" || b.Status == "Approved") &&
-            b.StartTime < req.EndTime && b.EndTime > req.StartTime);
+            b.StartTime < endUtc && b.EndTime > startUtc);
         if (overlapCount >= sched.MaxConcurrent)
             return Conflict("Slot is full. Choose another slot.");
 
         var ownerOverlap = await _bookings.Find(b =>
             b.Nic == nic &&
             b.Status != "Cancelled" &&
-            b.StartTime < req.EndTime && b.EndTime > req.StartTime)
-            .AnyAsync();
+            b.StartTime < endUtc && b.EndTime > startUtc).AnyAsync();
         if (ownerOverlap)
             return Conflict("You already have a booking that overlaps this slot.");
 
+        // -------- Persist UTC ----------
         var booking = new Booking
         {
             StationId = req.StationId,
             Nic = nic,
-            StartTime = req.StartTime,
-            EndTime = req.EndTime,
+            StartTime = startUtc,
+            EndTime = endUtc,
             Status = "Pending",
             CreatedAt = now,
             IsQrActive = false
@@ -133,17 +172,8 @@ public class BookingsController : ControllerBase
 
         await _bookings.InsertOneAsync(booking);
 
-        return Ok(new
-        {
-            booking.Id,
-            booking.StationId,
-            booking.StartTime,
-            booking.EndTime,
-            booking.Status,
-            booking.IsQrActive,
-            booking.QrToken,
-            booking.QrExpiresAt
-        });
+        // Return both UTC + Local (default Asia/Colombo)
+        return Ok(BookingMapping.ToDto(booking, tz));
     }
 
     // -------------------- Update / Cancel --------------------
@@ -155,23 +185,66 @@ public class BookingsController : ControllerBase
         var current = await _bookings.Find(x => x.Id == id).FirstOrDefaultAsync();
         if (current is null) return NotFound();
 
-        // Owner NIC must match the booking's NIC
         var nicClaim = User.FindFirst("nic")?.Value;
         if (!string.Equals(nicClaim, current.Nic, StringComparison.OrdinalIgnoreCase))
             return Forbid();
 
-        try
+        try { _rules.EnsureUpdateOrCancelAllowed(current.StartTime, DateTime.UtcNow); }
+        catch (InvalidOperationException ex) { return BadRequest(ex.Message); }
+
+        var tz = dto.TimeZoneId ?? "Asia/Colombo";
+
+        DateTime startUtc, endUtc, startLocal, endLocal;
+        if (dto.StartTimeLocal.HasValue && dto.EndTimeLocal.HasValue)
         {
-            _rules.EnsureUpdateOrCancelAllowed(current.StartTime, DateTime.UtcNow);
+            startLocal = DateTime.SpecifyKind(dto.StartTimeLocal.Value, DateTimeKind.Unspecified);
+            endLocal = DateTime.SpecifyKind(dto.EndTimeLocal.Value, DateTimeKind.Unspecified);
+            startUtc = TimezoneHelper.ToUtcFromLocal(startLocal, tz);
+            endUtc = TimezoneHelper.ToUtcFromLocal(endLocal, tz);
         }
-        catch (InvalidOperationException ex)
+        else
         {
-            return BadRequest(ex.Message);
+            startUtc = DateTime.SpecifyKind(dto.StartTime, DateTimeKind.Utc);
+            endUtc = DateTime.SpecifyKind(dto.EndTime, DateTimeKind.Utc);
+            startLocal = TimezoneHelper.ToLocal(startUtc, tz);
+            endLocal = TimezoneHelper.ToLocal(endUtc, tz);
         }
 
+        if (endUtc <= startUtc) return BadRequest("Invalid slot.");
+
+        // Validate against local schedule on the (new) local day
+        var scheduleDayLocal = startLocal.Date;
+        var sched = await _schedules.Find(s =>
+            s.StationId == current.StationId && s.Date == scheduleDayLocal
+        ).FirstOrDefaultAsync();
+        if (sched == null) return BadRequest("No schedule for selected date.");
+
+        var dayLocal = sched.Date.Date;
+        var openLocal = dayLocal.AddMinutes(sched.OpenMinutes);
+        var closeLocal = dayLocal.AddMinutes(sched.CloseMinutes);
+        if (startLocal < openLocal || endLocal > closeLocal)
+            return BadRequest("Slot is outside station schedule.");
+
+        // Overlaps (UTC)
+        var overlapCount = await _bookings.CountDocumentsAsync(b =>
+            b.Id != id &&
+            b.StationId == current.StationId &&
+            (b.Status == "Pending" || b.Status == "Approved") &&
+            b.StartTime < endUtc && b.EndTime > startUtc);
+        if (overlapCount >= sched.MaxConcurrent)
+            return Conflict("Slot is full. Choose another slot.");
+
+        var ownerOverlap = await _bookings.Find(b =>
+            b.Id != id && b.Nic == current.Nic &&
+            b.Status != "Cancelled" &&
+            b.StartTime < endUtc && b.EndTime > startUtc
+        ).AnyAsync();
+        if (ownerOverlap)
+            return Conflict("You already have a booking that overlaps this slot.");
+
         var upd = Builders<Booking>.Update
-            .Set(x => x.StartTime, dto.StartTime)
-            .Set(x => x.EndTime, dto.EndTime);
+            .Set(x => x.StartTime, startUtc)
+            .Set(x => x.EndTime, endUtc);
 
         await _bookings.UpdateOneAsync(x => x.Id == id, upd);
         return NoContent();
@@ -240,14 +313,18 @@ public class BookingsController : ControllerBase
         var (ok, error, b) = await validator.ValidateAsync(body.Token);
         if (!ok) return Unauthorized(error);
 
+        var tz = "Asia/Colombo";
         return Ok(new
         {
             ok = true,
             bookingId = b.Id,
             nic = b.Nic,
             stationId = b.StationId,
-            start = b.StartTime,
-            end = b.EndTime
+            startUtc = b.StartTime,
+            endUtc = b.EndTime,
+            startLocal = ToLocal(b.StartTime, tz),
+            endLocal = ToLocal(b.EndTime, tz),
+            timeZoneId = tz
         });
     }
 
@@ -268,9 +345,12 @@ public class BookingsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(string id)
     {
+        var tz = HttpContext.Request.Query["tz"].ToString();
+        if (string.IsNullOrWhiteSpace(tz)) tz = "Asia/Colombo";
+
         var booking = await _bookings.Find(b => b.Id == id).FirstOrDefaultAsync();
         if (booking == null) return NotFound();
-        return Ok(booking);
+        return Ok(ToDto(booking, tz));
     }
 
     // -------------------- Pending queues --------------------
@@ -286,8 +366,11 @@ public class BookingsController : ControllerBase
         if (fromUtc.HasValue) f &= Builders<Booking>.Filter.Gte(b => b.StartTime, fromUtc.Value);
         if (toUtc.HasValue) f &= Builders<Booking>.Filter.Lte(b => b.StartTime, toUtc.Value);
 
+        var tz = HttpContext.Request.Query["tz"].ToString();
+        if (string.IsNullOrWhiteSpace(tz)) tz = "Asia/Colombo";
+
         var list = await _bookings.Find(f).SortBy(b => b.StartTime).ToListAsync();
-        return Ok(list);
+        return Ok(list.Select(b => ToDto(b, tz)));
     }
 
     // GET /api/bookings/my/pending
@@ -298,9 +381,12 @@ public class BookingsController : ControllerBase
         var nic = User.FindFirst("nic")?.Value;
         if (string.IsNullOrWhiteSpace(nic)) return Forbid();
 
+        var tz = HttpContext.Request.Query["tz"].ToString();
+        if (string.IsNullOrWhiteSpace(tz)) tz = "Asia/Colombo";
+
         var list = await _bookings.Find(b => b.Nic == nic && b.Status == "Pending")
                                   .SortBy(b => b.StartTime).ToListAsync();
-        return Ok(list);
+        return Ok(list.Select(b => ToDto(b, tz)));
     }
 
     // GET /api/bookings/my/counts
@@ -344,10 +430,9 @@ public class BookingsController : ControllerBase
         var filter = Builders<Booking>.Filter.Eq(b => b.Status, "Approved");
 
         var list = await _bookings.Find(filter)
-                                  .SortByDescending(b => b.StartTime)
-                                  .ToListAsync();
-
-        return Ok(list);
+                           .SortByDescending(b => b.StartTime)
+                           .ToListAsync();
+        return Ok(list.Select(b => ToDto(b, HttpContext.Request.Query["tz"].ToString() ?? "Asia/Colombo")));
     }
 
     // GET /api/bookings/completed
@@ -358,10 +443,14 @@ public class BookingsController : ControllerBase
         // Return ALL completed bookings (no time filter)
         var filter = Builders<Booking>.Filter.Eq(b => b.Status, "Completed");
 
+        var tz = HttpContext.Request.Query["tz"].ToString();
+        if (string.IsNullOrWhiteSpace(tz)) tz = "Asia/Colombo";
+
         var list = await _bookings.Find(filter)
-                                  .SortByDescending(b => b.StartTime) // newest first
+                                  .SortByDescending(b => b.StartTime)
                                   .ToListAsync();
 
-        return Ok(list);
+        return Ok(list.Select(b => ToDto(b, tz)));
+
     }
 }

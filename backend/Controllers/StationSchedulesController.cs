@@ -35,7 +35,7 @@ public class StationSchedulesController : ControllerBase
         if (station is null) return NotFound("Station not found or inactive");
 
         // ✅ normalize date to UTC midnight
-        dto.Date = DateTime.SpecifyKind(dto.Date.Date, DateTimeKind.Utc);
+        dto.Date = DateTime.SpecifyKind(dto.Date.Date, DateTimeKind.Unspecified);
 
         // ✅ validate time range in minutes
         if (dto.OpenMinutes < 0 || dto.OpenMinutes >= dto.CloseMinutes || dto.CloseMinutes > 1440)
@@ -59,13 +59,10 @@ public class StationSchedulesController : ControllerBase
         if (to < from) return BadRequest("to < from");
 
         // ✅ normalize to UTC date-only to avoid off-by-one issues
-        var fromUtc = DateTime.SpecifyKind(from.Date, DateTimeKind.Utc);
-        var toUtc = DateTime.SpecifyKind(to.Date, DateTimeKind.Utc);
-
-        var res = await _schedules.Find(x =>
-            x.StationId == id &&
-            x.Date >= fromUtc && x.Date <= toUtc
-        ).ToListAsync();
+        var fromLocal = DateTime.SpecifyKind(from.Date, DateTimeKind.Unspecified);
+        var toLocal = DateTime.SpecifyKind(to.Date, DateTimeKind.Unspecified);
+        var res = await _schedules.Find(x => x.StationId == id &&
+            x.Date >= fromLocal && x.Date <= toLocal).ToListAsync();
 
         return Ok(res);
     }
@@ -82,7 +79,7 @@ public class StationSchedulesController : ControllerBase
         if (station is null) return NotFound("Station missing");
 
         // ✅ normalize date to UTC midnight
-        var normalizedDate = DateTime.SpecifyKind(patch.Date.Date, DateTimeKind.Utc);
+        var normalizedDate = DateTime.SpecifyKind(patch.Date.Date, DateTimeKind.Unspecified);
 
         // ✅ validate time range in minutes
         if (patch.OpenMinutes < 0 || patch.OpenMinutes >= patch.CloseMinutes || patch.CloseMinutes > 1440)
@@ -110,43 +107,56 @@ public class StationSchedulesController : ControllerBase
         return res.DeletedCount == 0 ? NotFound() : NoContent();
     }
 
-    // GET /api/stations/{stationId}/slots?date=2025-10-05&minutesPerSlot=30
+    // GET /api/stations/{stationId}/slots?date=2025-10-06&minutesPerSlot=30
     [AllowAnonymous] // or [Authorize] if you prefer
     [HttpGet("stations/{stationId}/slots")]
     public async Task<IActionResult> GetSlots(
         string stationId, [FromQuery] DateTime date,
         [FromQuery] int minutesPerSlot = 30)
     {
-        // 1) Find schedule for that date
-        var day = date.Date;
+        if (minutesPerSlot <= 0) return BadRequest("minutesPerSlot must be > 0");
+
+        // ✅ Treat query date as a LOCAL calendar day (Unspecified)
+        var day = DateTime.SpecifyKind(date.Date, DateTimeKind.Unspecified);
+        var next = day.AddDays(1);
+
+        // ✅ Match schedule by range (avoids .Date translation + Kind issues)
         var sched = await _schedules.Find(s =>
-            s.StationId == stationId && s.Date.Date == day).FirstOrDefaultAsync();
+            s.StationId == stationId &&
+            s.Date >= day && s.Date < next
+        ).FirstOrDefaultAsync();
+
         if (sched == null) return NotFound("No schedule for the selected date.");
 
-        // 2) Build slots from Open..Close
-        var open = day.AddMinutes(sched.OpenMinutes);
-        var close = day.AddMinutes(sched.CloseMinutes);
-        if (close <= open || minutesPerSlot <= 0) return BadRequest("Invalid schedule.");
+        // Build local slots from Open..Close (local wall-clock)
+        var openLocal = day.AddMinutes(sched.OpenMinutes);
+        var closeLocal = day.AddMinutes(sched.CloseMinutes);
+        if (closeLocal <= openLocal) return BadRequest("Invalid schedule.");
 
         var slots = new List<object>();
-        for (var start = open; start < close; start = start.AddMinutes(minutesPerSlot))
+        for (var start = openLocal; start < closeLocal; start = start.AddMinutes(minutesPerSlot))
         {
             var end = start.AddMinutes(minutesPerSlot);
-            if (end > close) break;
+            if (end > closeLocal) break;
 
-            // 3) Count overlapping bookings (Pending + Approved)
+            // Convert local -> UTC for overlap checks (bookings are stored in UTC)
+            var startUtc = Backend.Services.TimezoneHelper.ToUtcFromLocal(start, "Asia/Colombo");
+            var endUtc = Backend.Services.TimezoneHelper.ToUtcFromLocal(end, "Asia/Colombo");
+
             var activeCount = await _bookings.CountDocumentsAsync(b =>
                 b.StationId == stationId &&
                 (b.Status == "Pending" || b.Status == "Approved") &&
-                b.StartTime < end && b.EndTime > start);
+                b.StartTime < endUtc && b.EndTime > startUtc);
 
             var available = Math.Max(0, sched.MaxConcurrent - (int)activeCount);
 
             slots.Add(new
             {
-                startUtc = start,
-                endUtc = end,
-                available // 0 means full
+                startLocal = start,
+                endLocal = end,
+                startUtc,
+                endUtc,
+                available
             });
         }
 
