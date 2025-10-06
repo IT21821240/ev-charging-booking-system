@@ -35,7 +35,7 @@ public class StationSchedulesController : ControllerBase
         if (station is null) return NotFound("Station not found or inactive");
 
         // ✅ normalize date to UTC midnight
-        dto.Date = DateTime.SpecifyKind(dto.Date.Date, DateTimeKind.Unspecified);
+        dto.Date = dto.Date.Date.AddHours(12);
 
         // ✅ validate time range in minutes
         if (dto.OpenMinutes < 0 || dto.OpenMinutes >= dto.CloseMinutes || dto.CloseMinutes > 1440)
@@ -79,7 +79,7 @@ public class StationSchedulesController : ControllerBase
         if (station is null) return NotFound("Station missing");
 
         // ✅ normalize date to UTC midnight
-        var normalizedDate = DateTime.SpecifyKind(patch.Date.Date, DateTimeKind.Unspecified);
+        var normalizedDate = patch.Date.Date.AddHours(12);
 
         // ✅ validate time range in minutes
         if (patch.OpenMinutes < 0 || patch.OpenMinutes >= patch.CloseMinutes || patch.CloseMinutes > 1440)
