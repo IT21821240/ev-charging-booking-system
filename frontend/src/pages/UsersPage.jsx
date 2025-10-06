@@ -10,11 +10,15 @@ export default function UsersPage() {
   const [msg, setMsg] = useState("");
   const [list, setList] = useState([]);
 
+  const VISIBLE_ROLES = new Set(["Backoffice", "StationOperator"]);
+
   async function load() {
     try {
       if (usersApi.list) {
         const u = await usersApi.list();
-        setList(u || []);
+        // Only keep Backoffice or StationOperator in UI
+        const filtered = (u || []).filter((x) => VISIBLE_ROLES.has(x?.role));
+        setList(filtered);
       }
     } catch (e) {
       console.error("Failed to load users", e);
@@ -45,14 +49,21 @@ export default function UsersPage() {
     }
   }
 
+  // Defensive filter at render too (in case load() gets reused elsewhere)
+  const visibleList = (list || []).filter((u) => VISIBLE_ROLES.has(u?.role));
+
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">User Management</h1>
-      <p className="text-sm text-gray-600">
+      <h1 className="text-2xl font-semibold text-center">User Management</h1>
+      <p className="text-sm text-gray-600 text-center">
         Backoffice can create web users with roles <b>Backoffice</b> or <b>Station Operator</b>.
       </p>
 
-      <form onSubmit={onCreate} className="border rounded p-4 grid gap-3 max-w-lg">
+      {/* Centered form */}
+      <form
+        onSubmit={onCreate}
+        className="border rounded p-4 grid gap-3 max-w-lg mx-auto bg-white"
+      >
         <div>
           <label className="block text-sm mb-1">Email</label>
           <input
@@ -89,8 +100,8 @@ export default function UsersPage() {
         {msg && <div className="text-sm text-gray-700">{msg}</div>}
       </form>
 
-      {list.length > 0 && (
-        <div className="border rounded p-4">
+      {visibleList.length > 0 && (
+        <div className="border rounded p-4 max-w-5xl mx-auto bg-white">
           <div className="font-medium mb-2">Existing Users</div>
           <div className="overflow-x-auto">
             <table className="min-w-[700px] w-full text-sm">
@@ -103,7 +114,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((u) => (
+                {visibleList.map((u) => (
                   <tr key={u.id || u._id} className="border-b">
                     <td className="py-2 pr-4">{u.email}</td>
                     <td className="py-2 pr-4">{u.role}</td>
@@ -131,11 +142,19 @@ export default function UsersPage() {
                     </td>
                   </tr>
                 ))}
+                {visibleList.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center text-gray-500">
+                      No Backoffice or StationOperator users to display.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
+      <br></br>
     </div>
   );
 }

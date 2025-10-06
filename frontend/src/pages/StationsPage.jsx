@@ -20,13 +20,13 @@ export default function StationsPage() {
       setList(Array.isArray(data) ? data : []);
       // Seed edit buffer for visible list
       const seed = {};
-      (Array.isArray(data) ? data : []).forEach(s => {
+      (Array.isArray(data) ? data : []).forEach((s) => {
         seed[s.id] = {
           name: s.name || "",
           type: s.type || "AC",
           totalSlots: Number(s.totalSlots) || 1,
           lat: s.lat ?? "",
-          lng: s.lng ?? ""
+          lng: s.lng ?? "",
         };
       });
       setEdits(seed);
@@ -34,7 +34,9 @@ export default function StationsPage() {
       setMsg(e.message || "Failed to load stations.");
     }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   /* ---------- helpers ---------- */
   const toNumOrNull = (v) => {
@@ -115,7 +117,6 @@ export default function StationsPage() {
       await load();
       setMsg("Deactivated.");
     } catch (err) {
-      // Show friendly hint if it’s the active-bookings rule
       const em = String(err.message || "");
       if (em.includes("booking") || em.includes("Booking") || em.includes("409")) {
         setMsg(em || "Cannot deactivate: active future bookings exist.");
@@ -145,156 +146,253 @@ export default function StationsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Stations</h2>
+      <header className="flex items-center justify-between">
+        <h2 className="text-2xl font-semibold tracking-tight">Stations</h2>
+      </header>
+
+      {/* message bar */}
+      {msg && (
+        <div
+          role="status"
+          className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800"
+        >
+          {msg}
+        </div>
+      )}
 
       {/* Create */}
-      <div className="border p-4 rounded space-y-3 bg-white">
-        <div className="font-medium">Create Station</div>
-        <form onSubmit={onCreate} className="grid gap-2 md:grid-cols-2">
-          <input
-            className="border p-2 rounded"
-            placeholder="Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <select
-            className="border p-2 rounded"
-            value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value })}
-          >
-            <option value="AC">AC</option>
-            <option value="DC">DC</option>
-          </select>
-          <input
-            className="border p-2 rounded"
-            type="number"
-            min={1}
-            placeholder="Total Slots"
-            value={form.totalSlots}
-            onChange={(e) => setForm({ ...form, totalSlots: e.target.value })}
-          />
-          <input
-            className="border p-2 rounded"
-            type="number"
-            step="any"
-            placeholder="Lat (optional)"
-            value={form.lat}
-            onChange={(e) => setForm({ ...form, lat: e.target.value })}
-          />
-          <input
-            className="border p-2 rounded"
-            type="number"
-            step="any"
-            placeholder="Lng (optional)"
-            value={form.lng}
-            onChange={(e) => setForm({ ...form, lng: e.target.value })}
-          />
+      <section className="rounded-lg border bg-white">
+        <div className="border-b px-4 py-3">
+          <h3 className="font-medium">Create Station</h3>
+        </div>
+        <form onSubmit={onCreate} className="p-4">
+          <fieldset className="grid gap-3 md:grid-cols-2" disabled={busy} aria-busy={busy}>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="create-name" className="text-sm text-gray-700">
+                Name<span className="text-red-500">*</span>
+              </label>
+              <input
+                id="create-name"
+                className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="e.g., Main Street Charger"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
 
-          <div className="md:col-span-2">
-            <button
-              className="px-3 py-2 bg-gray-900 text-white rounded disabled:opacity-60"
-              disabled={busy}
-            >
-              {busy ? "Creating..." : "Create"}
-            </button>
-          </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="create-type" className="text-sm text-gray-700">
+                Type
+              </label>
+              <select
+                id="create-type"
+                className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
+              >
+                <option value="AC">AC</option>
+                <option value="DC">DC</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="create-slots" className="text-sm text-gray-700">
+                Total Slots
+              </label>
+              <input
+                id="create-slots"
+                className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                type="number"
+                min={1}
+                placeholder="1"
+                value={form.totalSlots}
+                onChange={(e) => setForm({ ...form, totalSlots: e.target.value })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="create-lat" className="text-sm text-gray-700">
+                Latitude (optional)
+              </label>
+              <input
+                id="create-lat"
+                className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                type="number"
+                step="any"
+                placeholder="e.g., 6.9271"
+                value={form.lat}
+                onChange={(e) => setForm({ ...form, lat: e.target.value })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1 md:col-span-2 md:max-w-sm">
+              <label htmlFor="create-lng" className="text-sm text-gray-700">
+                Longitude (optional)
+              </label>
+              <input
+                id="create-lng"
+                className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                type="number"
+                step="any"
+                placeholder="e.g., 79.8612"
+                value={form.lng}
+                onChange={(e) => setForm({ ...form, lng: e.target.value })}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <button
+                className="inline-flex h-10 items-center justify-center rounded bg-gray-900 px-4 text-white shadow hover:bg-black disabled:opacity-60"
+                disabled={busy}
+              >
+                {busy ? "Creating…" : "Create"}
+              </button>
+            </div>
+          </fieldset>
         </form>
-      </div>
+      </section>
 
       {/* List + edit */}
-      <div className="border p-4 rounded space-y-3 bg-white">
-        <div className="font-medium">All Stations</div>
+      <section className="rounded-lg border bg-white">
+        <div className="border-b px-4 py-3">
+          <h3 className="font-medium">All Stations</h3>
+        </div>
 
-        {!hasList && <div className="text-sm text-gray-500">No stations yet.</div>}
+        {!hasList && (
+          <div className="p-6 text-sm text-gray-600">
+            No stations yet. Use <span className="font-medium">Create Station</span> above to add
+            your first station.
+          </div>
+        )}
 
-        <div className="space-y-4">
+        <div className="divide-y">
           {list.map((s) => {
             const e = edits[s.id] || {};
+            const id = s.id;
+            const statusClasses = s.isActive
+              ? "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200"
+              : "bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-200";
             return (
-              <div key={s.id} className="border p-3 rounded space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="font-medium">{s.name}</div>
-                  <span className={`text-xs px-2 py-0.5 rounded ${
-                    s.isActive ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-700"
-                  }`}>
+              <div key={id} className="p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <div className="text-base font-medium">{s.name}</div>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs ${statusClasses}`}>
                     {s.isActive ? "Active" : "Inactive"}
                   </span>
                   <span className="text-xs text-gray-500">({s.type})</span>
                   <span className="text-xs text-gray-500">Slots: {s.totalSlots}</span>
                 </div>
 
-                <div className="grid md:grid-cols-5 gap-2">
-                  <input
-                    className="border p-2 rounded"
-                    value={e.name ?? ""}
-                    onChange={(ev) => onEditChange(s.id, "name", ev.target.value)}
-                    placeholder="Name"
-                  />
-                  <select
-                    className="border p-2 rounded"
-                    value={e.type ?? "AC"}
-                    onChange={(ev) => onEditChange(s.id, "type", ev.target.value)}
-                  >
-                    <option value="AC">AC</option>
-                    <option value="DC">DC</option>
-                  </select>
-                  <input
-                    className="border p-2 rounded"
-                    type="number"
-                    min={1}
-                    value={e.totalSlots ?? 1}
-                    onChange={(ev) => onEditChange(s.id, "totalSlots", ev.target.value)}
-                    placeholder="Total Slots"
-                  />
-                  <input
-                    className="border p-2 rounded"
-                    type="number"
-                    step="any"
-                    value={e.lat ?? ""}
-                    onChange={(ev) => onEditChange(s.id, "lat", ev.target.value)}
-                    placeholder="Lat"
-                  />
-                  <input
-                    className="border p-2 rounded"
-                    type="number"
-                    step="any"
-                    value={e.lng ?? ""}
-                    onChange={(ev) => onEditChange(s.id, "lng", ev.target.value)}
-                    placeholder="Lng"
-                  />
+                <div className="grid gap-3 md:grid-cols-5">
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor={`${id}-name`} className="text-sm text-gray-700">
+                      Name
+                    </label>
+                    <input
+                      id={`${id}-name`}
+                      className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                      value={e.name ?? ""}
+                      onChange={(ev) => onEditChange(id, "name", ev.target.value)}
+                      placeholder="Name"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor={`${id}-type`} className="text-sm text-gray-700">
+                      Type
+                    </label>
+                    <select
+                      id={`${id}-type`}
+                      className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                      value={e.type ?? "AC"}
+                      onChange={(ev) => onEditChange(id, "type", ev.target.value)}
+                    >
+                      <option value="AC">AC</option>
+                      <option value="DC">DC</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor={`${id}-slots`} className="text-sm text-gray-700">
+                      Total Slots
+                    </label>
+                    <input
+                      id={`${id}-slots`}
+                      className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                      type="number"
+                      min={1}
+                      value={e.totalSlots ?? 1}
+                      onChange={(ev) => onEditChange(id, "totalSlots", ev.target.value)}
+                      placeholder="Total Slots"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor={`${id}-lat`} className="text-sm text-gray-700">
+                      Latitude
+                    </label>
+                    <input
+                      id={`${id}-lat`}
+                      className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                      type="number"
+                      step="any"
+                      value={e.lat ?? ""}
+                      onChange={(ev) => onEditChange(id, "lat", ev.target.value)}
+                      placeholder="Lat"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor={`${id}-lng`} className="text-sm text-gray-700">
+                      Longitude
+                    </label>
+                    <input
+                      id={`${id}-lng`}
+                      className="h-10 rounded border border-gray-300 px-3 outline-none focus:ring-2 focus:ring-indigo-500"
+                      type="number"
+                      step="any"
+                      value={e.lng ?? ""}
+                      onChange={(ev) => onEditChange(id, "lng", ev.target.value)}
+                      placeholder="Lng"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
-                    onClick={() => onUpdate(s.id)}
-                    className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-60"
+                    onClick={() => onUpdate(id)}
+                    className="inline-flex h-9 items-center justify-center rounded bg-blue-600 px-3 text-white shadow hover:bg-blue-700 disabled:opacity-60"
                     disabled={busy}
+                    title="Save changes"
+                    aria-busy={busy}
                   >
-                    {busy ? "Saving..." : "Update"}
+                    {busy ? "Saving…" : "Update"}
                   </button>
 
                   {s.isActive ? (
                     <button
-                      onClick={() => onDeactivate(s.id)}
-                      className="px-3 py-2 bg-red-600 text-white rounded disabled:opacity-60"
+                      onClick={() => onDeactivate(id)}
+                      className="inline-flex h-9 items-center justify-center rounded bg-red-600 px-3 text-white shadow hover:bg-red-700 disabled:opacity-60"
                       disabled={busy}
+                      title="Deactivate station"
                     >
                       Deactivate
                     </button>
                   ) : (
                     <button
-                      onClick={() => onReactivate(s.id)}
-                      className="px-3 py-2 bg-green-600 text-white rounded disabled:opacity-60"
+                      onClick={() => onReactivate(id)}
+                      className="inline-flex h-9 items-center justify-center rounded bg-emerald-600 px-3 text-white shadow hover:bg-emerald-700 disabled:opacity-60"
                       disabled={busy}
+                      title="Reactivate station"
                     >
                       Reactivate
                     </button>
                   )}
 
-                  {/* Manage schedules (both roles) */}
                   <Link
-                    className="px-3 py-2 bg-indigo-600 text-white rounded"
+                    className="inline-flex h-9 items-center justify-center rounded bg-indigo-600 px-3 text-white shadow hover:bg-indigo-700"
                     to={`/stations/${s.id}/schedules`}
+                    title="Manage schedules for this station"
                   >
                     Manage Schedules
                   </Link>
@@ -303,9 +401,7 @@ export default function StationsPage() {
             );
           })}
         </div>
-      </div>
-
-      {msg && <div className="text-sm text-gray-700">{msg}</div>}
+      </section>
     </div>
   );
 }
