@@ -4,6 +4,7 @@
 //          capacity, and operational status.
 // -----------------------------------------------------------------------------
 using System.ComponentModel.DataAnnotations;
+using MongoDB.Bson;
 
 namespace Backend.Models;
 
@@ -18,5 +19,10 @@ public class Station
     public double? Lat { get; set; }
     public double? Lng { get; set; }
     public bool IsActive { get; set; } = true;
+    public ObjectId? ImageFileId { get; set; }
+    public string? ImageContentType
+    {
+        get; set;
+    }
 }
 

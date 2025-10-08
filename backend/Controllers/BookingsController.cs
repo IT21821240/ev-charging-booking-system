@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 using Backend.Models;
 using Backend.Services;
+using Backend.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Cryptography;
 using static Backend.Services.BookingMapping;     
@@ -18,12 +19,14 @@ namespace Backend.Controllers;
 [Route("api/[controller]")]
 public class BookingsController : ControllerBase
 {
+    private readonly IMongoDatabase _db;
     private readonly IMongoCollection<Booking> _bookings;
     private readonly IMongoCollection<StationSchedule> _schedules;
     private readonly BookingRules _rules;
 
     public BookingsController(IMongoDatabase db, BookingRules rules)
     {
+        _db = db;
         _bookings = db.GetCollection<Booking>("bookings");
         _schedules = db.GetCollection<StationSchedule>("stationSchedules");
         _rules = rules;
@@ -282,7 +285,6 @@ public class BookingsController : ControllerBase
     // -------------------- Approve + QR --------------------
     // POST /api/bookings/{id}/approve
     // Generates a URL-safe random token, sets expiry and keeps single-use fields
-    [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpPost("{id}/approve")]
     [Authorize(Roles = "Backoffice,StationOperator")]
     public async Task<IActionResult> Approve(string id)
@@ -290,6 +292,13 @@ public class BookingsController : ControllerBase
         var b = await _bookings.Find(x => x.Id == id).FirstOrDefaultAsync();
         if (b == null) return NotFound();
         if (b.Status != "Pending") return Conflict("Only pending bookings can be approved.");
+
+        if (User.IsInRole("StationOperator"))
+        {
+            var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+            if (me is null || !me.IsActive) return Forbid();
+            if (!AuthHelpers.OperatorHasStation(me, b.StationId)) return Forbid();
+        }
 
         await _bookings.UpdateOneAsync(x => x.Id == id,
             Builders<Booking>.Update
@@ -313,6 +322,13 @@ public class BookingsController : ControllerBase
         var (ok, error, b) = await validator.ValidateAsync(body.Token);
         if (!ok) return Unauthorized(error);
 
+        if (User.IsInRole("StationOperator"))
+        {
+            var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+            if (me is null || !me.IsActive) return Forbid();
+            if (!AuthHelpers.OperatorHasStation(me, b.StationId)) return Forbid();
+        }
+
         var tz = "Asia/Colombo";
         return Ok(new
         {
@@ -333,6 +349,16 @@ public class BookingsController : ControllerBase
     [HttpPost("{id}/finalize")]
     public async Task<IActionResult> Finalize(string id)
     {
+        // Load booking so we know which station it belongs to
+        var b = await _bookings.Find(x => x.Id == id).FirstOrDefaultAsync();
+            if (b is null) return NotFound();
+            if (User.IsInRole("StationOperator"))
+                {
+            var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+                    if (me is null || !me.IsActive) return Forbid();
+                    if (!AuthHelpers.OperatorHasStation(me, b.StationId)) return Forbid();
+               }
+
         var res = await _bookings.UpdateOneAsync(x => x.Id == id,
             Builders<Booking>.Update
         .Set(x => x.Status, "Completed")
@@ -350,6 +376,14 @@ public class BookingsController : ControllerBase
 
         var booking = await _bookings.Find(b => b.Id == id).FirstOrDefaultAsync();
         if (booking == null) return NotFound();
+
+        if (User.IsInRole("StationOperator"))
+               {
+            var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+                   if (me is null || !me.IsActive) return Forbid();
+                  if (!AuthHelpers.OperatorHasStation(me, booking.StationId)) return Forbid();
+               }
+
         return Ok(ToDto(booking, tz));
     }
 
@@ -453,4 +487,95 @@ public class BookingsController : ControllerBase
         return Ok(list.Select(b => ToDto(b, tz)));
 
     }
+
+    //operators pending booking
+    [Authorize(Roles = "StationOperator")]
+    [HttpGet("operator/pending")]
+    public async Task<IActionResult> GetPendingForMyStations()
+    {
+        var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+        if (me is null || !me.IsActive) return Forbid();
+        if (me.AssignedStationIds is null || me.AssignedStationIds.Count == 0)
+            return Ok(Array.Empty<object>());
+
+        var tz = HttpContext.Request.Query["tz"].ToString();
+        if (string.IsNullOrWhiteSpace(tz)) tz = "Asia/Colombo";
+
+        var list = await _bookings.Find(b =>
+                me.AssignedStationIds.Contains(b.StationId) &&
+                b.Status == "Pending")
+            .SortBy(b => b.StartTime)
+            .ToListAsync();
+
+        return Ok(list.Select(b => ToDto(b, tz)));
+    }
+
+    //operators count
+    [Authorize(Roles = "StationOperator")]
+    [HttpGet("operator/counts")]
+    public async Task<IActionResult> GetOperatorCounts()
+    {
+        var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+        if (me is null || !me.IsActive) return Forbid();
+        if (me.AssignedStationIds is null || me.AssignedStationIds.Count == 0)
+            return Ok(new { pending = 0, approved = 0 });
+
+        var baseFilter = Builders<Booking>.Filter.In(b => b.StationId, me.AssignedStationIds);
+
+        var pendingCountTask = _bookings.CountDocumentsAsync(baseFilter & Builders<Booking>.Filter.Eq(b => b.Status, "Pending"));
+        var approvedCountTask = _bookings.CountDocumentsAsync(baseFilter & Builders<Booking>.Filter.Eq(b => b.Status, "Approved"));
+
+        await Task.WhenAll(pendingCountTask, approvedCountTask);
+
+        return Ok(new { pending = pendingCountTask.Result, approved = approvedCountTask.Result });
+    }
+
+    //approved list
+    [Authorize(Roles = "StationOperator")]
+    [HttpGet("operator/approved")]
+    public async Task<IActionResult> GetApprovedForMyStations()
+    {
+        var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+        if (me is null || !me.IsActive) return Forbid();
+        if (me.AssignedStationIds is null || me.AssignedStationIds.Count == 0)
+            return Ok(Array.Empty<object>());
+
+        var tz = HttpContext.Request.Query["tz"].ToString();
+        if (string.IsNullOrWhiteSpace(tz)) tz = "Asia/Colombo";
+
+        var list = await _bookings.Find(b =>
+                me.AssignedStationIds.Contains(b.StationId) &&
+                b.Status == "Approved")
+            .SortBy(b => b.StartTime)
+            .ToListAsync();
+
+        return Ok(list.Select(b => ToDto(b, tz)));
+    }
+
+    //reject a booking
+    [Authorize(Roles = "Backoffice,StationOperator")]
+    [HttpPost("{id}/reject")]
+    public async Task<IActionResult> Reject(string id, [FromBody] string? reason = null)
+    {
+        var b = await _bookings.Find(x => x.Id == id).FirstOrDefaultAsync();
+        if (b is null) return NotFound();
+        if (b.Status != "Pending") return Conflict("Only pending bookings can be rejected.");
+
+        if (User.IsInRole("StationOperator"))
+        {
+            var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+            if (me is null || !me.IsActive) return Forbid();
+            if (!AuthHelpers.OperatorHasStation(me, b.StationId)) return Forbid();
+        }
+
+        var upd = Builders<Booking>.Update
+            .Set(x => x.Status, "Rejected")
+            .Set(x => x.IsQrActive, false);
+        if (!string.IsNullOrWhiteSpace(reason))
+            upd = upd.Set("RejectionReason", reason);
+
+        await _bookings.UpdateOneAsync(x => x.Id == id, upd);
+        return Ok(new { message = "Rejected" });
+    }
+
 }

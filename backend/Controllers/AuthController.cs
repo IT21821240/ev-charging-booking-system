@@ -1,4 +1,4 @@
-/*
+﻿/*
 -------------------------------------------------------------------------------------
 File Name    : AuthController.cs
 Description  : This controller handles user authentication and authorization 
@@ -88,6 +88,10 @@ public class AuthController : ControllerBase
         if (user is null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
             return Unauthorized("Invalid credentials.");
 
+        // ❗block deactivated users
+        if (!user.IsActive)
+            return Unauthorized("Account is deactivated. Please contact support.");
+
         // Claims + token
         var claims = new List<Claim>
     {
@@ -115,7 +119,8 @@ public class AuthController : ControllerBase
                 Email = u.Email,
                 Role = u.Role,
                 IsActive = u.IsActive,
-                CreatedAt = u.CreatedAt
+                CreatedAt = u.CreatedAt,
+                AssignedStationIds = u.AssignedStationIds
             })
             .ToListAsync();
 
@@ -213,4 +218,5 @@ public sealed class UserDto
     public string Role { get; set; } = default!;
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
+    public List<string>? AssignedStationIds { get; set; }
 }

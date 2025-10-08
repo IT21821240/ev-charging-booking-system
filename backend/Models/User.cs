@@ -12,6 +12,7 @@ public class User
     public string PasswordHash { get; set; } = default!;
     // "Backoffice" | "StationOperator" | "EVOwner"
     public string Role { get; set; } = "EVOwner";
+    public List<string> AssignedStationIds { get; set; } = new();
 
     // Optional: link owner NIC if role = EVOwner (so you can enforce ownership)
     public string? Nic { get; set; }
