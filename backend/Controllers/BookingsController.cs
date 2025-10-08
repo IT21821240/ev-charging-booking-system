@@ -510,6 +510,28 @@ public class BookingsController : ControllerBase
         return Ok(list.Select(b => ToDto(b, tz)));
     }
 
+    // GET /api/bookings/operator/completed
+    [Authorize(Roles = "StationOperator")]
+    [HttpGet("operator/completed")]
+    public async Task<IActionResult> GetCompletedForMyStationsSimple()
+    {
+        var me = await AuthHelpers.GetCurrentUserAsync(User, _db);
+        if (me is null || !me.IsActive) return Forbid();
+        if (me.AssignedStationIds is null || me.AssignedStationIds.Count == 0)
+            return Ok(Array.Empty<object>());
+
+        var tz = HttpContext.Request.Query["tz"].ToString();
+        if (string.IsNullOrWhiteSpace(tz)) tz = "Asia/Colombo";
+
+        var list = await _bookings.Find(b =>
+                me.AssignedStationIds.Contains(b.StationId) &&
+                b.Status == "Completed")
+            .SortByDescending(b => b.StartTime)
+            .ToListAsync();
+
+        return Ok(list.Select(b => ToDto(b, tz)));
+    }
+
     //operators count
     [Authorize(Roles = "StationOperator")]
     [HttpGet("operator/counts")]
