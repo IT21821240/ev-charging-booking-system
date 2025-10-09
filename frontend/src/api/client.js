@@ -20,6 +20,21 @@ function authHeaders() {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+async function apiMultipart(path, { method = "POST", formData }) {
+  const res = await fetch(API_URL + path, {
+    method,
+    headers: { ...authHeaders() },   // no 'Content-Type' here
+    body: formData
+  });
+  const text = await res.text();
+  const json = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const msg = (json && (json.message || json.error)) || "Request failed";
+    throw new Error(msg);
+  }
+  return json;
+}
+
 export async function api(path, { method = "GET", body, headers } = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     method,
@@ -77,8 +92,26 @@ export const owners = {
 // -------- Stations (Backoffice / StationOperator) --------
 export const stations = {
   list: () => api(`/stations`),
-  create: (body) => api(`/stations`, { method: "POST", body }),
+  mine: () => api(`/stations/mine`), 
+  create: ({ name, type, totalSlots, lat, lng, file }) => {
+    const fd = new FormData();
+    fd.append("name", name);
+    fd.append("type", type);
+    fd.append("totalSlots", String(totalSlots ?? 1));
+    if (lat != null && lat !== "") fd.append("lat", String(lat));
+    if (lng != null && lng !== "") fd.append("lng", String(lng));
+    if (file) fd.append("file", file); // IFormFile? in backend
+    return apiMultipart(`/stations`, { method: "POST", formData: fd });
+  },
   update: (id, body) => api(`/stations/${id}`, { method: "PUT", body }),
+  updateImage(id, file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  return apiMultipart(`/stations/${encodeURIComponent(id)}/image`, {
+    method: "PUT",
+    formData: fd,
+  });
+},
   deactivate: (id) => api(`/stations/${id}/deactivate`, { method: "POST" }),
   reactivate: (id) => api(`/stations/${id}/reactivate`, { method: "POST" }),
   get: (id) => api(`/stations/${encodeURIComponent(id)}`),
@@ -108,6 +141,9 @@ export const bookings = {
   listApproved: () => api('/bookings/approved'),
   listCompleted: () => api('/bookings/completed'),
   bookingsSummary: () => api('/bookings/op/summary'), 
+  operatorCounts: () => api(`/bookings/operator/counts`),
+  operatorPending: (tz = "Asia/Colombo") => api(`/bookings/operator/pending?tz=${encodeURIComponent(tz)}`),
+  operatorApproved: (tz = "Asia/Colombo") => api(`/bookings/operator/approved?tz=${encodeURIComponent(tz)}`),
 };
 
 export const schedules = {
@@ -131,5 +167,34 @@ export const schedules = {
   remove: (_stationId, scheduleId) =>
     api(`/schedules/${encodeURIComponent(scheduleId)}`, { method: "DELETE" }),
 };
+
+export const stationOps = {
+  list: (stationId) =>
+    api(`/stations/${encodeURIComponent(stationId)}/operators`),
+
+  add: (stationId, userId) =>
+    api(`/stations/${encodeURIComponent(stationId)}/operators/${encodeURIComponent(userId)}`, {
+      method: "POST",
+    }),
+
+  remove: (stationId, userId) =>
+    api(`/stations/${encodeURIComponent(stationId)}/operators/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    }),
+  searchCandidates(stationId, { q = "", page = 1, pageSize = 20 } = {}) {
+    const qs = new URLSearchParams({ ...(q ? { q } : {}), page, pageSize });
+    return api(`/stations/${encodeURIComponent(stationId)}/operators/candidates?${qs.toString()}`);
+  },
+};
+
+export const stationSlots = {
+  list: (stationId, { date, minutesPerSlot = 30 }) =>
+    api(
+      `/stations/${encodeURIComponent(stationId)}/slots?` +
+      new URLSearchParams({ date, minutesPerSlot }).toString()
+    ),
+};
+
+
 
 

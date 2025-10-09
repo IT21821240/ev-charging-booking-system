@@ -13,17 +13,16 @@ export default function TopBar() {
   const items = [];
   if (user?.role === "Backoffice") {
     items.push(
-      { to: "/backoffice", label: "Dashboard" },
+      { to: "/backoffice", label: "Dashboard", end: true },   // exact
       { to: "/owners", label: "Owners" },
       { to: "/stations", label: "Stations" },
-      { to: "/bookings", label: "Bookings" },
       { to: "/admin/users", label: "Admin" }
     );
   } else if (user?.role === "StationOperator") {
     items.push(
-      { to: "/operator", label: "Dashboard" },
-      { to: "/stations", label: "Stations" },
-      { to: "/bookings", label: "Bookings" }
+      { to: "/op", label: "Dashboard", end: true },           // exact
+      { to: "/op/stations", label: "Stations" },
+      { to: "/op/bookings", label: "Bookings" }
     );
   }
 
@@ -53,9 +52,8 @@ export default function TopBar() {
           {/* Brand */}
           <button
             onClick={() =>
-              nav(
-                user ? (user.role === "Backoffice" ? "/backoffice" : "/operator") : "/"
-              )
+              nav(user ? (user.role === "Backoffice" ? "/backoffice" : "/op") : "/")
+              // ^ route for operators fixed to /op (was /operator)
             }
             className="group flex items-center gap-2 rounded px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
             aria-label="Go to dashboard"
@@ -71,7 +69,7 @@ export default function TopBar() {
           {/* Center nav (desktop) */}
           <nav className="hidden md:flex md:items-center md:gap-1">
             {items.map((it) => (
-              <NavLink key={it.to} to={it.to} className={linkClass}>
+              <NavLink key={it.to} to={it.to} end={it.end} className={linkClass}>
                 {it.label}
               </NavLink>
             ))}
@@ -87,22 +85,11 @@ export default function TopBar() {
                 aria-expanded={mobileOpen}
                 onClick={() => setMobileOpen((v) => !v)}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-700"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   {mobileOpen ? (
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                   ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
                   )}
                 </svg>
               </button>
@@ -123,21 +110,13 @@ export default function TopBar() {
                   <span className="hidden max-w-[12rem] truncate text-sm text-gray-700 sm:inline">
                     {user.email ?? "signed in"}
                   </span>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className={`h-4 w-4 text-gray-500 transition ${userOpen ? "rotate-180" : ""}`}
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-500 transition ${userOpen ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
                     <path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.17l3.71-2.94a.75.75 0 1 1 .94 1.16l-4.24 3.37a.75.75 0 0 1-.94 0L5.21 8.39a.75.75 0 0 1 .02-1.18z" />
                   </svg>
                 </button>
 
                 {userOpen && (
-                  <div
-                    role="menu"
-                    className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
-                  >
+                  <div role="menu" className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
                     <div className="px-3 py-2">
                       <p className="truncate text-sm font-medium text-gray-900">{user.email ?? "—"}</p>
                       <p className="text-xs text-gray-500">
@@ -145,21 +124,14 @@ export default function TopBar() {
                       </p>
                     </div>
                     <div className="border-t border-gray-100" />
-                    <button
-                      onClick={doSignOut}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                      role="menuitem"
-                    >
+                    <button onClick={doSignOut} className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50" role="menuitem">
                       Sign out
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              <button
-                onClick={() => nav("/login")}
-                className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:brightness-95"
-              >
+              <button onClick={() => nav("/login")} className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:brightness-95">
                 Sign in
               </button>
             )}
@@ -180,6 +152,7 @@ export default function TopBar() {
                 <NavLink
                   key={it.to}
                   to={it.to}
+                  end={it.end}
                   className={({ isActive }) =>
                     [
                       "rounded-md px-3 py-2 text-sm font-medium",
@@ -193,17 +166,7 @@ export default function TopBar() {
                   {it.label}
                 </NavLink>
               ))}
-              {user && (
-                <button
-                  onClick={() => {
-                    setMobileOpen(false);
-                    doSignOut();
-                  }}
-                  className="mt-1 w-full rounded-md bg-gray-900 px-3 py-2 text-left text-sm font-medium text-white"
-                >
-                  Sign out
-                </button>
-              )}
+              {/* sign out shown below if authenticated */}
             </div>
           </nav>
         </div>
