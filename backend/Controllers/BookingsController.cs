@@ -52,8 +52,9 @@ public class BookingsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> ForOwner([FromQuery] string nic)
     {
-        // If caller is an owner, ensure they can only view their own NIC
-        if (User.IsInRole("EVOwner"))
+        // Determine if the caller is the actual owner for this NIC
+        var isOwner = User.IsInRole("EVOwner");
+        if (isOwner)
         {
             var nicClaim = User.FindFirst("nic")?.Value;
             if (!string.Equals(nicClaim, nic, StringComparison.OrdinalIgnoreCase))
@@ -67,8 +68,31 @@ public class BookingsController : ControllerBase
                                   .SortByDescending(b => b.StartTime)
                                   .ToListAsync();
 
-        return Ok(list.Select(b => ToDto(b, tz)));
+        if (isOwner)
+        {
+            // Owner sees QR fields
+            var now = DateTime.UtcNow;
+            var result = list.Select(b => {
+                var dto = ToDto(b, tz);
+                var isUsable = b.IsQrActive
+                               && b.Status == "Approved"
+                               && b.QrExpiresAt.HasValue
+                               && now < b.QrExpiresAt.Value;
+                return new
+                {
+                    dto,
+                    qrToken = b.QrToken,
+                };
+            });
+            return Ok(result);
+        }
+        else
+        {
+            // Operators/Backoffice: no QR leakage
+            return Ok(list.Select(b => ToDto(b, tz)));
+        }
     }
+
 
     // ----------------------- Create -----------------------
     public class CreateBookingRequest
