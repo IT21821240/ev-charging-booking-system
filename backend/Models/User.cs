@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: User.cs
+// Namespace: Backend.Models;
 // Purpose: Represents a system user account with authentication credentials,
 //          assigned role, and ownership linkage (if applicable).
 // -----------------------------------------------------------------------------

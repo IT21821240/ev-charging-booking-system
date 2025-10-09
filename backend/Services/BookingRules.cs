@@ -1,5 +1,6 @@
 ﻿// -----------------------------------------------------------------------------
 // File: BookingRules.cs
+// Namespace: Backend.Services
 // Purpose: Defines validation rules for EV charging bookings,
 //          including time-based restrictions for creation, updates,
 //          and cancellations.

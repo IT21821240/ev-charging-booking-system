@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: QrTokenService.cs
+// Namespace: Backend.Services
 // Purpose: Provides functionality for generating short-lived JWT-based QR tokens
 //          for EV charging bookings. Used for secure station validation.
 // -----------------------------------------------------------------------------

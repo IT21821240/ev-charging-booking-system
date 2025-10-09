@@ -1,5 +1,6 @@
 ﻿// -----------------------------------------------------------------------------
 // File: OwnersController.cs
+// Namespace : Backend.Controllers
 // Purpose: EV Owner management endpoints for both web and mobile flows.
 //          Includes: mobile self-register (profile upsert + login), web CRUD,
 //          activate/deactivate/reactivate, secure profile read/update, paging,
@@ -295,6 +296,7 @@ public class OwnersController : ControllerBase
         return Ok(new { message = "Your account and login have been deactivated." });
     }
 
+    // get no of EV Owners
     // GET /api/owners/count
     [Authorize(Roles = "Backoffice")]
     [HttpGet("count")]

@@ -1,5 +1,6 @@
 ﻿// -----------------------------------------------------------------------------
 // File: StationsController.cs
+// Namespace : Backend.Controllers
 // Purpose: Manage EV charging stations: list, create, update, (de)activate,
 //          detail view (with optional expand), and basic counts.
 // -----------------------------------------------------------------------------
@@ -43,6 +44,7 @@ public class StationsController : ControllerBase
         return Ok(items.Select(ToDto));
     }
 
+    // view the stations
     // GET /api/stations/{id}?expand=false
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(string id, [FromQuery] bool expand = false)
@@ -58,6 +60,7 @@ public class StationsController : ControllerBase
         return Ok(new { station = ToDto(station), pendingCount });
     }
 
+    // Create a station
     // POST /api/stations  (Backoffice only)
     [Authorize(Roles = "Backoffice")]
     [HttpPost]
@@ -125,6 +128,7 @@ public class StationsController : ControllerBase
         });
     }
 
+    // update the station
     // PUT /api/stations/{id}  (Backoffice only)
     [Authorize(Roles = "Backoffice")]
     [HttpPut("{id}")]
@@ -135,6 +139,7 @@ public class StationsController : ControllerBase
         return res.MatchedCount == 0 ? NotFound() : NoContent();
     }
 
+    // deactivate a station
     // POST /api/stations/{id}/deactivate  (Backoffice or StationOperator)
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpPost("{id}/deactivate")]
@@ -160,6 +165,7 @@ public class StationsController : ControllerBase
         return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Station deactivated" });
     }
 
+    // reactivate a station
     // POST /api/stations/{id}/reactivate  (Backoffice or StationOperator)
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpPost("{id}/reactivate")]
@@ -173,6 +179,7 @@ public class StationsController : ControllerBase
         return res.MatchedCount == 0 ? NotFound() : Ok(new { message = "Station reactivated" });
     }
 
+    // get available stations count
     // GET /api/stations/count
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpGet("count")]
@@ -203,6 +210,7 @@ public class StationsController : ControllerBase
         return File(bytes, contentType);
     }
 
+    // update the station image
     // PUT /api/stations/{id}/image  (Backoffice only)
     [Authorize(Roles = "Backoffice")]
     [HttpPut("{id}/image")]

@@ -1,6 +1,7 @@
 ﻿/*
 -------------------------------------------------------------------------------------
 File Name    : AuthController.cs
+Namespace    : Backend.Controllers
 Description  : This controller handles user authentication and authorization 
                operations for the web service. It includes functionalities for 
                registering users, logging in, managing user accounts (activation/

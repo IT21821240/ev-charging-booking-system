@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: Station.cs
+// Namespace: Backend.Models;
 // Purpose: Represents an EV charging station with its type, location,
 //          capacity, and operational status.
 // -----------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: TokenService.cs
+// Namespace: Backend.Services
 // Purpose: Implements JWT (JSON Web Token) generation for authenticated users.
 // -----------------------------------------------------------------------------
 using System.Security.Claims;

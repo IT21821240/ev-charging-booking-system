@@ -1,3 +1,11 @@
+// -----------------------------------------------------------------------------
+// File: BookingMapping.cs
+// Namespace: Backend.Services
+// Purpose: Provides mapping logic to convert Booking entities into BookingDto
+//           objects. Handles time zone conversions for start and end times using
+//           the TimezoneHelper service to ensure accurate representation of both
+//           UTC and local time data when transferring booking information.
+// -----------------------------------------------------------------------------
 using Backend.Models;
 using static Backend.Services.TimezoneHelper;
 

@@ -1,5 +1,6 @@
 ﻿// -----------------------------------------------------------------------------
 // File: QrValidator.cs
+// Namespace: Backend.Services
 // Purpose: Provides QR JWT validation logic for EV booking verification.
 // -----------------------------------------------------------------------------
 using System.IdentityModel.Tokens.Jwt;

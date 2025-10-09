@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: LoginRequest.cs
+// Namespace: Backend.Models;
 // Purpose: Data Transfer Object (DTO) for handling user login requests.
 // -----------------------------------------------------------------------------
 namespace Backend.Models;

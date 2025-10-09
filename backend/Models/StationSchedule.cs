@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: StationSchedule.cs
+// Namespace: Backend.Models;
 // Purpose: Represents the per-day operating schedule and maximum concurrent
 //          capacity for a charging station.
 // -----------------------------------------------------------------------------

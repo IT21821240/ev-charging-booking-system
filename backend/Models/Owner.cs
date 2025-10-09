@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: Owner.cs
+// Namespace: Backend.Models;
 // Purpose: Represents an EV owner profile stored in MongoDB, including
 //          personal details, contact info, and account activity status.
 // -----------------------------------------------------------------------------

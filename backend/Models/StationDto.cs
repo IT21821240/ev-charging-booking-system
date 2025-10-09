@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: StationDto.cs
+// Namespace: Backend.Models;
 // Purpose: Lightweight DTO for returning station data with image URL included.
 // -----------------------------------------------------------------------------
 namespace Backend.Models;

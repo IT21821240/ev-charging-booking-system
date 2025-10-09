@@ -1,6 +1,7 @@
 /*
 -------------------------------------------------------------------------------------
 File Name    : AdminUsersController.cs
+Namespace    : Backend.Controllers
 Description  : This controller manages the association between station operators and stations
                in the backend system. It provides endpoints for retrieving, adding, removing,
                and replacing station operators, as well as for listing operator candidates.
@@ -29,6 +30,7 @@ public class StationOperatorsController : ControllerBase
         _users = db.GetCollection<User>("users");
     }
 
+    // Retrieves all active Station Operators assigned to a specific station. Returns 404 if the station does not exist.
     // GET /api/stations/{stationId}/operators
     [HttpGet("{stationId}/operators")]
     public async Task<IActionResult> GetOperatorsForStation(string stationId)
@@ -47,6 +49,7 @@ public class StationOperatorsController : ControllerBase
         return Ok(ops);
     }
 
+    // Assigns an active Station Operator to a specific active station.
     // POST /api/stations/{stationId}/operators/{userId}
     [HttpPost("{stationId}/operators/{userId}")]
     public async Task<IActionResult> AddOperatorToStation(string stationId, string userId)
@@ -66,6 +69,7 @@ public class StationOperatorsController : ControllerBase
         return NoContent();
     }
 
+    // Removes a Station Operator’s assignment from a specific station.
     // DELETE /api/stations/{stationId}/operators/{userId}
     [HttpDelete("{stationId}/operators/{userId}")]
     public async Task<IActionResult> RemoveOperatorFromStation(string stationId, string userId)
@@ -88,6 +92,7 @@ public class StationOperatorsController : ControllerBase
         public List<string>? UserIds { get; set; }
     }
 
+    // Replaces all operators currently assigned to a station with a new list of specified active Station Operators.
     // POST /api/stations/{stationId}/operators:replace
     [HttpPost("{stationId}/operators:replace")]
     public async Task<IActionResult> ReplaceStationOperators(
@@ -116,6 +121,7 @@ public class StationOperatorsController : ControllerBase
         return NoContent();
     }
 
+    // Retrieves a paginated list of active Station Operators
     // GET /api/stations/{stationId}/operators/candidates?q=ann&page=1&pageSize=20
     [HttpGet("{stationId}/operators/candidates")]
     public async Task<IActionResult> GetOperatorCandidates(

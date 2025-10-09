@@ -1,5 +1,6 @@
 ﻿// -----------------------------------------------------------------------------
 // File: StationSchedulesController.cs
+// Namespace : Backend.Controllers
 // Purpose: Station schedule management for operators/backoffice.
 //          Create/list/update/delete daily schedules and expose a public
 //          slots endpoint that computes availability from bookings.
@@ -27,6 +28,7 @@ public class StationSchedulesController : ControllerBase
         _bookings = db.GetCollection<Booking>("bookings");
     }
 
+    // Create station schedules
     // POST /api/stations/{id}/schedules
     [HttpPost("stations/{id}/schedules")]
     public async Task<IActionResult> Create(string id, [FromBody] StationSchedule dto)
@@ -52,6 +54,7 @@ public class StationSchedulesController : ControllerBase
         return Ok(dto);
     }
 
+    // Get all schedules
     // GET /api/stations/{id}/schedules?from=2025-09-26&to=2025-10-03
     [HttpGet("stations/{id}/schedules")]
     public async Task<IActionResult> List(string id, [FromQuery] DateTime from, [FromQuery] DateTime to)
@@ -67,7 +70,7 @@ public class StationSchedulesController : ControllerBase
         return Ok(res);
     }
 
-
+    // Update an existing schedule
     // PUT /api/schedules/{scheduleId}
     [HttpPut("schedules/{scheduleId}")]
     public async Task<IActionResult> Update(string scheduleId, [FromBody] StationSchedule patch)
@@ -99,6 +102,7 @@ public class StationSchedulesController : ControllerBase
         return res.MatchedCount == 0 ? NotFound() : NoContent();
     }
 
+    // Delete the schedule
     // DELETE /api/schedules/{scheduleId}
     [HttpDelete("schedules/{scheduleId}")]
     public async Task<IActionResult> Delete(string scheduleId)
@@ -107,6 +111,7 @@ public class StationSchedulesController : ControllerBase
         return res.DeletedCount == 0 ? NotFound() : NoContent();
     }
 
+    // Get the schedules
     // GET /api/stations/{stationId}/slots?date=2025-10-06&minutesPerSlot=30
     [AllowAnonymous] // or [Authorize] if you prefer
     [HttpGet("stations/{stationId}/slots")]

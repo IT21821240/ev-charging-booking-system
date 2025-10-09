@@ -1,3 +1,12 @@
+// -----------------------------------------------------------------------------
+// File: BookingRules.cs
+// Namespace: Backend.Services
+// Purpose: Provides utility methods for handling time zone conversions related
+//           to bookings. Includes functions to retrieve a specific time zone,
+//           convert UTC times to local times, and convert local times back to UTC.
+//           Ensures consistent and accurate time representation across different
+//           regions, with "Asia/Colombo" used as the default time zone.
+// -----------------------------------------------------------------------------
 using System;
 
 namespace Backend.Services

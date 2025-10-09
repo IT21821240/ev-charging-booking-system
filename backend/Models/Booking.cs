@@ -1,5 +1,6 @@
 ﻿// -----------------------------------------------------------------------------
 // File: Booking.cs
+// Namespace: Backend.Models;
 // Purpose: Represents a charging session booking with status, QR token tracking,
 //          and time window (StartTime–EndTime). Used by BookingsController.
 // -----------------------------------------------------------------------------

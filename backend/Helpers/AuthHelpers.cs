@@ -1,4 +1,11 @@
-// AuthHelpers.cs
+// -----------------------------------------------------------------------------
+// File: AuthHelpers.cs
+// Namespace: Backend.Helpers;
+// Purpose: Provides helper methods for authentication and authorization tasks.
+//           Includes methods to retrieve the currently logged-in user from
+//           the authentication principal and to verify if a station operator
+//           is assigned to a specific station.
+// -----------------------------------------------------------------------------
 using System.Security.Claims;
 using MongoDB.Driver;
 using Backend.Models;

@@ -1,5 +1,6 @@
 ﻿// -----------------------------------------------------------------
 // File: BookingsController.cs
+// Namespace: Backend.Controllers
 // Purpose: Manage EV charging bookings: create (≤7 days ahead), update/cancel
 //          (≥12h before start), approve/QR, finalize, and operator/owner queries.
 // -----------------------------------------------------------------
@@ -47,6 +48,7 @@ public class BookingsController : ControllerBase
         });
     }
 
+    // Retrieves all bookings for a specific NIC (owner or operator).
     // GET /api/bookings?nic=200012345678
     [Authorize]
     [HttpGet]
@@ -95,6 +97,7 @@ public class BookingsController : ControllerBase
 
 
     // ----------------------- Create -----------------------
+    // Creates a new booking for an EV owner.
     public class CreateBookingRequest
     {
         public string StationId { get; set; } = default!;
@@ -211,6 +214,7 @@ public class BookingsController : ControllerBase
     }
 
     // -------------------- Update (same procedure as Create) --------------------
+    // // Updates an existing booking 
     // PUT /api/bookings/{id}
     [Authorize(Roles = "EVOwner")]
     [HttpPut("{id}")]
@@ -342,6 +346,7 @@ public class BookingsController : ControllerBase
         });
     }
 
+    // Cancels an existing booking by the EV owner.
     // DELETE /api/bookings/{id}
     [Authorize(Roles = "EVOwner")]
     [HttpDelete("{id}")]
@@ -372,6 +377,7 @@ public class BookingsController : ControllerBase
     }
 
     // -------------------- Approve + QR --------------------
+    // Allows Station Operator to approve a pending booking.
     // POST /api/bookings/{id}/approve
     // Generates a URL-safe random token, sets expiry and keeps single-use fields
     [HttpPost("{id}/approve")]
@@ -434,6 +440,7 @@ public class BookingsController : ControllerBase
     }
 
     // -------------------- Finalize + Lookup --------------------
+    // Marks an approved booking as "Completed" after charging session ends.
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpPost("{id}/finalize")]
     public async Task<IActionResult> Finalize(string id)
@@ -477,6 +484,7 @@ public class BookingsController : ControllerBase
     }
 
     // -------------------- Pending queues --------------------
+    // Lists all pending bookings globally or filtered by station ID and date range.
     // GET /api/bookings/pending?stationId=...&fromUtc=...&toUtc=...
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpGet("pending")]
@@ -496,6 +504,7 @@ public class BookingsController : ControllerBase
         return Ok(list.Select(b => ToDto(b, tz)));
     }
 
+    // Returns pending bookings for the currently logged-in EV owner.
     // GET /api/bookings/my/pending
     [Authorize(Roles = "EVOwner")]
     [HttpGet("my/pending")]
@@ -512,6 +521,7 @@ public class BookingsController : ControllerBase
         return Ok(list.Select(b => ToDto(b, tz)));
     }
 
+    // Returns summary counts (pending, approved future) for the EV owner.
     // GET /api/bookings/my/counts
     [Authorize(Roles = "EVOwner")]
     [HttpGet("my/counts")]
@@ -531,7 +541,7 @@ public class BookingsController : ControllerBase
         return Ok(new { pending, approvedFuture });
     }
 
-    // Global counts (no station/operator mapping)
+    // Provides a global summary of pending and approved bookings.
     // GET /api/bookings/op/summary
     // Response: { pending: <int>, approved: <int> }
     [Authorize(Roles = "Backoffice,StationOperator")]
@@ -544,6 +554,7 @@ public class BookingsController : ControllerBase
         return Ok(new { pending, approved });
     }
 
+    // Retrieves all approved bookings (global scope).
     // GET /api/bookings/approved
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpGet("approved")]
@@ -558,6 +569,7 @@ public class BookingsController : ControllerBase
         return Ok(list.Select(b => ToDto(b, HttpContext.Request.Query["tz"].ToString() ?? "Asia/Colombo")));
     }
 
+    // Retrieves all completed bookings.
     // GET /api/bookings/completed
     [Authorize(Roles = "Backoffice,StationOperator")]
     [HttpGet("completed")]
@@ -599,6 +611,7 @@ public class BookingsController : ControllerBase
         return Ok(list.Select(b => ToDto(b, tz)));
     }
 
+    // Returns completed bookings for stations assigned to the operator.
     // GET /api/bookings/operator/completed
     [Authorize(Roles = "StationOperator")]
     [HttpGet("operator/completed")]

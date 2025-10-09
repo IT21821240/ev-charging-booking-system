@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
 // File: BookingsRepository.cs
+// Namespace: Backend.Services
 // Purpose: Defines a repository interface and implementation for accessing
 //          and managing Booking data in the MongoDB database.
 // -----------------------------------------------------------------------------
