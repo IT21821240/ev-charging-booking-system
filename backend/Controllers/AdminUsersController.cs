@@ -1,3 +1,11 @@
+/*
+-------------------------------------------------------------------------------------
+File Name    : AdminUsersController.cs
+Description  : This controller manages the association between station operators and stations
+               in the backend system. It provides endpoints for retrieving, adding, removing,
+               and replacing station operators, as well as for listing operator candidates.
+-------------------------------------------------------------------------------------
+*/
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
