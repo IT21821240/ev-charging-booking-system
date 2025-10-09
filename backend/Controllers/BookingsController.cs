@@ -210,56 +210,82 @@ public class BookingsController : ControllerBase
         });
     }
 
-    // -------------------- Update / Cancel --------------------
+    // -------------------- Update (same procedure as Create) --------------------
     // PUT /api/bookings/{id}
     [Authorize(Roles = "EVOwner")]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string id, [FromBody] UpdateBookingDto dto)
     {
+        // Load current booking
         var current = await _bookings.Find(x => x.Id == id).FirstOrDefaultAsync();
         if (current is null) return NotFound();
 
+        // Ownership
         var nicClaim = User.FindFirst("nic")?.Value;
-        if (!string.Equals(nicClaim, current.Nic, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(nicClaim) ||
+            !string.Equals(nicClaim, current.Nic, StringComparison.OrdinalIgnoreCase))
             return Forbid();
 
-        try { _rules.EnsureUpdateOrCancelAllowed(current.StartTime, DateTime.UtcNow); }
-        catch (InvalidOperationException ex) { return BadRequest(ex.Message); }
+        // Respect modification rules (e.g., cutoff before start)
+        try
+        {
+            _rules.EnsureUpdateOrCancelAllowed(current.StartTime, DateTime.UtcNow);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         var tz = dto.TimeZoneId ?? "Asia/Colombo";
 
+        // -------- Decide input mode (same as Create) ----------
         DateTime startUtc, endUtc, startLocal, endLocal;
         if (dto.StartTimeLocal.HasValue && dto.EndTimeLocal.HasValue)
         {
+            // Client sent local wall times
             startLocal = DateTime.SpecifyKind(dto.StartTimeLocal.Value, DateTimeKind.Unspecified);
             endLocal = DateTime.SpecifyKind(dto.EndTimeLocal.Value, DateTimeKind.Unspecified);
-            startUtc = TimezoneHelper.ToUtcFromLocal(startLocal, tz);
-            endUtc = TimezoneHelper.ToUtcFromLocal(endLocal, tz);
+            startUtc = ToUtcFromLocal(startLocal, tz);
+            endUtc = ToUtcFromLocal(endLocal, tz);
         }
         else
         {
+            // Client sent UTC
             startUtc = DateTime.SpecifyKind(dto.StartTime, DateTimeKind.Utc);
             endUtc = DateTime.SpecifyKind(dto.EndTime, DateTimeKind.Utc);
-            startLocal = TimezoneHelper.ToLocal(startUtc, tz);
-            endLocal = TimezoneHelper.ToLocal(endUtc, tz);
+            // derive local for schedule validation
+            startLocal = ToLocal(startUtc, tz);
+            endLocal = ToLocal(endUtc, tz);
         }
 
         if (endUtc <= startUtc) return BadRequest("Invalid slot.");
 
-        // Validate against local schedule on the (new) local day
-        var scheduleDayLocal = startLocal.Date;
+        var now = DateTime.UtcNow;
+        // Same temporal constraints as Create
+        if (startUtc.Date > now.Date.AddDays(7))
+            return BadRequest("Bookings must be within 7 days.");
+        if (startUtc < now)
+            return BadRequest("Cannot book past or started slots.");
+
+        // -------- Schedule validation in LOCAL day (same as Create) ----------
+        var dayLocal = DateTime.SpecifyKind(startLocal.Date, DateTimeKind.Unspecified);
+        var next = dayLocal.AddDays(1);
+
+        // Find schedule by range (robust against Kind/Date translation)
         var sched = await _schedules.Find(s =>
-            s.StationId == current.StationId && s.Date == scheduleDayLocal
+            s.StationId == current.StationId &&
+            s.Date >= dayLocal && s.Date < next
         ).FirstOrDefaultAsync();
+
         if (sched == null) return BadRequest("No schedule for selected date.");
 
-        var dayLocal = sched.Date.Date;
         var openLocal = dayLocal.AddMinutes(sched.OpenMinutes);
         var closeLocal = dayLocal.AddMinutes(sched.CloseMinutes);
+
         if (startLocal < openLocal || endLocal > closeLocal)
             return BadRequest("Slot is outside station schedule.");
 
-        // Overlaps (UTC)
+        // -------- Overlap checks in UTC (same as Create) ----------
         var overlapCount = await _bookings.CountDocumentsAsync(b =>
             b.Id != id &&
             b.StationId == current.StationId &&
@@ -269,19 +295,51 @@ public class BookingsController : ControllerBase
             return Conflict("Slot is full. Choose another slot.");
 
         var ownerOverlap = await _bookings.Find(b =>
-            b.Id != id && b.Nic == current.Nic &&
+            b.Id != id &&
+            b.Nic == current.Nic &&
             b.Status != "Cancelled" &&
             b.StartTime < endUtc && b.EndTime > startUtc
         ).AnyAsync();
         if (ownerOverlap)
             return Conflict("You already have a booking that overlaps this slot.");
 
+        // -------- Persist (UTC) + regenerate QR to reflect new time window ----------
+        // Prepare an updated instance just for QR generation
+        var updatedForQr = new Booking
+        {
+            Id = current.Id,
+            StationId = current.StationId,
+            Nic = current.Nic,
+            StartTime = startUtc,
+            EndTime = endUtc,
+            Status = current.Status,
+            CreatedAt = current.CreatedAt,
+            IsQrActive = current.IsQrActive
+        };
+
+        var qrSvc = HttpContext.RequestServices.GetRequiredService<IQrTokenService>();
+        var (jwt, jti, expUtc) = qrSvc.GenerateFor(updatedForQr);
+
         var upd = Builders<Booking>.Update
             .Set(x => x.StartTime, startUtc)
-            .Set(x => x.EndTime, endUtc);
+            .Set(x => x.EndTime, endUtc)
+            .Set(x => x.QrToken, jwt)
+            .Set(x => x.QrJti, jti)
+            .Set(x => x.QrIssuedAtUtc, DateTime.UtcNow)
+            .Set(x => x.QrExpiresAt, expUtc);
 
         await _bookings.UpdateOneAsync(x => x.Id == id, upd);
-        return NoContent();
+
+        // Reload minimal fields needed for DTO (or manually compose)
+        var updated = await _bookings.Find(x => x.Id == id).FirstOrDefaultAsync();
+
+        // Return same shape as Create (booking DTO + qrToken)
+        var dtoOut = BookingMapping.ToDto(updated, tz);
+        return Ok(new
+        {
+            booking = dtoOut,
+            qrToken = updated.QrToken
+        });
     }
 
     // DELETE /api/bookings/{id}
