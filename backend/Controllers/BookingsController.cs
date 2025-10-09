@@ -176,7 +176,14 @@ public class BookingsController : ControllerBase
         await _bookings.InsertOneAsync(booking);
 
         // Return both UTC + Local (default Asia/Colombo)
-        return Ok(BookingMapping.ToDto(booking, tz));
+        var dto = BookingMapping.ToDto(booking, tz);
+        return Ok(new
+        {
+            // existing shape your frontend already uses
+            booking = dto,
+            qrToken = booking.QrToken,
+
+        });
     }
 
     // -------------------- Update / Cancel --------------------
