@@ -63,16 +63,10 @@ export default function BackofficeDashboard() {
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Backoffice</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Manage owners, stations, schedules and booking approvals.
+              Manage owners, stations and schedules.
             </p>
           </div>
           <div className="flex gap-2">
-            <Link
-              to="/bookings"
-              className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:brightness-95"
-            >
-              Review bookings {Arrow}
-            </Link>
             <Link
               to="/owners/new"
               className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
@@ -149,22 +143,19 @@ export default function BackofficeDashboard() {
             <Link to="/stations" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
               Manage stations
             </Link>
-            <Link to="/bookings" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
-              View bookings
-            </Link>
           </div>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900">Need to do</h3>
+          <h3 className="text-sm font-semibold text-gray-900">User Management</h3>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-            <li>Approve or reject pending reservations</li>
-            <li>Review owners with inactive accounts</li>
-            <li>Check stations near capacity</li>
+            <li>Add user accounts</li>
+            <li>Mange user accounts</li>
+            <li>Activate/Deactivate user accounts</li>
           </ul>
           <div className="mt-3">
-            <Link to="/bookings?status=Pending" className="inline-flex items-center gap-2 text-sm font-medium text-gray-900 hover:underline">
-              Go to approvals
+            <Link to="/admin/users" className="inline-flex items-center gap-2 text-sm font-medium text-gray-900 hover:underline">
+              Manage users
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M12.293 5.293a1 1 0 011.414 1.414L10.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4z" />
               </svg>
