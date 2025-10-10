@@ -1,5 +1,12 @@
+// -----------------------------------------------------------------------------
+// File: Owner.cs
+// Namespace: Backend.Models;
+// Purpose: Represents an EV owner profile stored in MongoDB, including
+//          personal details, contact info, and account activity status.
+// -----------------------------------------------------------------------------
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using System.ComponentModel.DataAnnotations;
 
 namespace Backend.Models;
 
@@ -10,6 +17,7 @@ public class Owner
     public string? Id { get; set; }
 
     [BsonElement("nic")] // explicitly map field name
+    [Required, RegularExpression(@"^[0-9]{9}[VvXx]$|^[0-9]{12}$", ErrorMessage = "NIC format invalid")]
     public string Nic { get; set; } = default!;
 
     [BsonElement("name")]

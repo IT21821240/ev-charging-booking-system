@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------------
+// File: UpdateOwnerDto.cs
+// Namespace: Backend.Models;
+// Purpose: Data Transfer Object (DTO) used when updating an EV Owner’s profile
+//          information via the OwnersController.
+// -----------------------------------------------------------------------------
 namespace Backend.Models;
 public class UpdateOwnerDto
 {

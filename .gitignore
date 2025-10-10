@@ -1,0 +1,17 @@
+# Visual Studio folder
+.vs/
+
+# VS Solution user data
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS Code workspace settings
+.vscode/
+
+# Solution-related SQLite DB
+*.slnx.sqlite
+
+# Misc workspace state files
+VSWorkspaceState.json

@@ -1,0 +1,41 @@
+// -----------------------------------------------------------------------------
+// File: BookingRules.cs
+// Namespace: Backend.Services
+// Purpose: Provides utility methods for handling time zone conversions related
+//           to bookings. Includes functions to retrieve a specific time zone,
+//           convert UTC times to local times, and convert local times back to UTC.
+//           Ensures consistent and accurate time representation across different
+//           regions, with "Asia/Colombo" used as the default time zone.
+// -----------------------------------------------------------------------------
+using System;
+
+namespace Backend.Services
+{
+    public static class TimezoneHelper
+    {
+        private const string DefaultTz = "Asia/Colombo";
+
+        public static TimeZoneInfo GetZone(string? tzId = null)
+        {
+            if (string.IsNullOrWhiteSpace(tzId)) tzId = DefaultTz;
+            return TimeZoneInfo.FindSystemTimeZoneById(tzId);
+        }
+
+        public static DateTime ToLocal(DateTime utc, string? tzId = null)
+        {
+            var zone = GetZone(tzId);
+            if (utc.Kind != DateTimeKind.Utc)
+                utc = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+            return TimeZoneInfo.ConvertTimeFromUtc(utc, zone);
+        }
+
+        public static DateTime ToUtcFromLocal(DateTime local, string? tzId = null)
+        {
+            var zone = GetZone(tzId);
+            if (local.Kind != DateTimeKind.Unspecified)
+                local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+            var dto = new DateTimeOffset(local, zone.GetUtcOffset(local));
+            return dto.UtcDateTime;
+        }
+    }
+}
